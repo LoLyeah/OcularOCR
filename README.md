@@ -1,5 +1,5 @@
 <div align="center">
-<img width="1200" height="475" alt="OcularOCR Banner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+<img width="1200" height="475" alt="OcularOCR Banner" src="https://images.unsplash.com/photo-1544383835-bda2bc66a55d?auto=format&fit=crop&w=1200&h=475&q=80" />
 
 # 👁️ OcularOCR
 

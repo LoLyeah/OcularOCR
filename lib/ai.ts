@@ -55,7 +55,7 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {
-  const prompt = "Please extract all the text exactly as it appears in these document images. Only output the extracted text, no introductory or conversational remarks.";
+  const prompt = "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });

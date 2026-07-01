@@ -16,6 +16,30 @@ interface DocumentViewerProps {
   onClose: () => void;
 }
 
+export function parseOcrPages(text: string): { pageNumber: number; text: string }[] {
+  if (!text) return [];
+  
+  const pageRegex = /---\s*PAGE\s+(\d+)\s*---/gi;
+  const matches = [...text.matchAll(pageRegex)];
+  
+  if (matches.length === 0) {
+    return [{ pageNumber: 1, text }];
+  }
+  
+  const pages: { pageNumber: number; text: string }[] = [];
+  
+  for (let i = 0; i < matches.length; i++) {
+    const currentMatch = matches[i];
+    const pageNum = parseInt(currentMatch[1], 10);
+    const startIndex = currentMatch.index! + currentMatch[0].length;
+    const endIndex = i + 1 < matches.length ? matches[i + 1].index : text.length;
+    const pageText = text.substring(startIndex, endIndex).trim();
+    pages.push({ pageNumber: pageNum, text: pageText });
+  }
+  
+  return pages;
+}
+
 export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps) {
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string>('');
@@ -32,6 +56,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
   const [error, setError] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  
+  const [selectedOcrPage, setSelectedOcrPage] = useState<number>(1);
+  const [ocrViewMode, setOcrViewMode] = useState<'single' | 'all'>('single');
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
@@ -133,9 +160,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         if (doc.type.includes('pdf')) {
           const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
           if (canvases) {
+            let pageIdx = 1;
             for (const canvas of canvases) {
               const text = await performOCR(canvas);
-              extractedText += text + '\n\n';
+              extractedText += `--- PAGE ${pageIdx} ---\n${text}\n\n`;
+              pageIdx++;
             }
           }
         } else if (fileUrl) {
@@ -289,16 +318,48 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     if (type === 'pdf') {
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF();
-      const lines = pdf.splitTextToSize(ocrText, 180);
-      let y = 15;
-      for (let i = 0; i < lines.length; i++) {
-        if (y > 280) {
+      const parsedPages = parseOcrPages(ocrText);
+      
+      parsedPages.forEach((p, index) => {
+        if (index > 0) {
           pdf.addPage();
-          y = 15;
         }
-        pdf.text(lines[i], 15, y);
-        y += 7;
-      }
+        
+        // Header
+        pdf.setFont('courier', 'bold');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 116, 139); // slate-500 style
+        pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber}`, 15, 12);
+        pdf.setDrawColor(226, 232, 240); // slate-200 style
+        pdf.line(15, 15, 195, 15);
+        
+        // Text styling
+        pdf.setFont('courier', 'normal');
+        pdf.setFontSize(9);
+        pdf.setTextColor(30, 41, 59); // slate-800
+        
+        const lines = pdf.splitTextToSize(p.text, 180);
+        let y = 22;
+        for (let i = 0; i < lines.length; i++) {
+          if (y > 280) {
+            pdf.addPage();
+            // Header for overflow page
+            pdf.setFont('courier', 'bold');
+            pdf.setFontSize(10);
+            pdf.setTextColor(100, 116, 139);
+            pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber} (CONTINUED)`, 15, 12);
+            pdf.setDrawColor(226, 232, 240);
+            pdf.line(15, 15, 195, 15);
+            
+            pdf.setFont('courier', 'normal');
+            pdf.setFontSize(9);
+            pdf.setTextColor(30, 41, 59);
+            y = 22;
+          }
+          pdf.text(lines[i], 15, y);
+          y += 5.5;
+        }
+      });
       pdf.save(`${doc.name}-extracted.pdf`);
     } else {
       const mime = type === 'md' ? 'text/markdown' : 'text/plain';
@@ -404,7 +465,118 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                          </button>
                        </div>
                     </div>
-                    <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed overflow-y-auto flex-1">{ocrText}</div>
+                    {(() => {
+                      const pages = parseOcrPages(ocrText);
+                      if (pages.length <= 1) {
+                        return (
+                          <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                            {ocrText}
+                          </div>
+                        );
+                      }
+                      
+                      const selectedPageData = pages.find(p => p.pageNumber === selectedOcrPage) || pages[0];
+                      
+                      return (
+                        <div className="flex flex-col h-full gap-3">
+                          {/* Page Selection Controls */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-150 dark:border-slate-800">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Page View:</span>
+                              <div className="flex rounded-md bg-white dark:bg-slate-900 p-0.5 border border-slate-200 dark:border-slate-700">
+                                <button
+                                  type="button"
+                                  onClick={() => setOcrViewMode('single')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                                    ocrViewMode === 'single'
+                                      ? 'bg-indigo-600 text-white shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                  }`}
+                                >
+                                  Single Page
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setOcrViewMode('all')}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                                    ocrViewMode === 'all'
+                                      ? 'bg-indigo-600 text-white shadow-sm'
+                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                                  }`}
+                                >
+                                  All Pages
+                                </button>
+                              </div>
+                            </div>
+
+                            {ocrViewMode === 'single' && (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={selectedOcrPage <= 1}
+                                  onClick={() => setSelectedOcrPage(prev => Math.max(1, prev - 1))}
+                                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-600 dark:text-slate-400 transition-colors"
+                                >
+                                  <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                
+                                <select
+                                  value={selectedOcrPage}
+                                  onChange={(e) => setSelectedOcrPage(Number(e.target.value))}
+                                  className="text-[10.5px] font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                >
+                                  {pages.map(p => (
+                                    <option key={p.pageNumber} value={p.pageNumber}>
+                                      Page {p.pageNumber}
+                                    </option>
+                                  ))}
+                                </select>
+                                
+                                <span className="text-[10.5px] text-slate-400 dark:text-slate-500 font-medium">
+                                  of {pages.length}
+                                </span>
+
+                                <button
+                                  type="button"
+                                  disabled={selectedOcrPage >= pages.length}
+                                  onClick={() => setSelectedOcrPage(prev => Math.min(pages.length, prev + 1))}
+                                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-600 dark:text-slate-400 transition-colors"
+                                >
+                                  <ChevronRight className="h-4 w-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Content Panel */}
+                          <div className="flex-1 overflow-y-auto min-h-[350px]">
+                            {ocrViewMode === 'single' ? (
+                              <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-lg border border-slate-100 dark:border-slate-800 h-full">
+                                <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b border-indigo-100/40 dark:border-indigo-900/40 pb-1.5 mb-3 font-mono">
+                                  --- PAGE {selectedPageData.pageNumber} ---
+                                </div>
+                                <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
+                                  {selectedPageData.text || <span className="italic text-slate-400">No text detected on this page.</span>}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-4">
+                                {pages.map(p => (
+                                  <div key={p.pageNumber} className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
+                                    <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b border-indigo-100/40 dark:border-indigo-900/40 pb-1.5 mb-3 font-mono">
+                                      --- PAGE {p.pageNumber} ---
+                                    </div>
+                                    <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
+                                      {p.text || <span className="italic text-slate-400">No text detected on this page.</span>}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">

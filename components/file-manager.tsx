@@ -651,7 +651,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative"
+      className="h-full w-full overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative"
     >
       <AnimatePresence>
         {isDragging && (

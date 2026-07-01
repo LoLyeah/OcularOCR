@@ -5,9 +5,9 @@
 
 **A privacy-first, zero-knowledge local-encrypted document vault & AI-powered OCR suite.**
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.4-blue.svg)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19.0-blue.svg)](https://react.dev/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.0-blue.svg)](https://tailwindcss.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.2-blue.svg)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.2-blue.svg)](https://react.dev/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.3-blue.svg)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 </div>
@@ -65,9 +65,9 @@ graph TD
 
 ## 🛠️ Tech Stack
 
-*   **Framework**: Next.js 15 (App Router)
-*   **Library**: React 19
-*   **Styling**: Tailwind CSS v4, Motion (Framer Motion)
+*   **Framework**: Next.js 16 (App Router)
+*   **Library**: React 19 (v19.2)
+*   **Styling**: Tailwind CSS v4 (v4.3), Motion (Framer Motion)
 *   **Icons**: Lucide React
 *   **Database**: IndexedDB (using `idb-keyval` for lightweight promise-based storage)
 *   **AI Integrations**: `@google/genai` (Gemini SDK), OpenAI API Client, Ollama compatibility

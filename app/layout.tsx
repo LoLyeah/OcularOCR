@@ -1,0 +1,39 @@
+import type {Metadata} from 'next';
+import './globals.css'; // Global styles
+import { PwaHandler } from '@/components/pwa-handler';
+
+export const metadata: Metadata = {
+  title: 'Ocular AI Vault',
+  description: 'Secure, client-side encrypted document storage and OCR processing system.',
+};
+
+export default function RootLayout({children}: {children: React.ReactNode}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+        <meta name="theme-color" content="#4f46e5" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const theme = localStorage.getItem('vault_theme');
+                if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark');
+                }
+              } catch (e) {}
+            `,
+          }}
+        />
+      </head>
+      <body suppressHydrationWarning className="bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans h-screen flex flex-col">
+        {children}
+        <PwaHandler />
+      </body>
+    </html>
+  );
+}

@@ -1,0 +1,561 @@
+import { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
+import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus } from 'lucide-react';
+import { DocumentEntry, getSettings, saveDocument, AISettings } from '@/lib/storage';
+import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
+import { performOCR } from '@/lib/ocr';
+import { renderPdfToCanvas } from '@/lib/pdf';
+import { summarizeText, extractTextFromImages } from '@/lib/ai';
+import { suggestTags } from '@/lib/tagger';
+
+interface DocumentViewerProps {
+  doc: DocumentEntry;
+  cryptoKey: CryptoKey;
+  onClose: () => void;
+}
+
+export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps) {
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [ocrText, setOcrText] = useState<string>('');
+  const [summary, setSummary] = useState<string>('');
+  
+  const [tags, setTags] = useState<string[]>([]);
+  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
+  const [isAutoTagging, setIsAutoTagging] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  
+  const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
+  const [error, setError] = useState<string | null>(null);
+  
+  const pdfContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let objectUrl: string;
+    
+    async function loadData() {
+      try {
+        const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
+        const blob = new Blob([decryptedBuffer], { type: doc.type });
+        objectUrl = URL.createObjectURL(blob);
+        
+        if (doc.type.includes('pdf')) {
+          const canvases = await renderPdfToCanvas(decryptedBuffer);
+          if (pdfContainerRef.current) {
+            pdfContainerRef.current.innerHTML = '';
+            canvases.forEach(canvas => {
+              canvas.style.width = '100%';
+              canvas.style.marginBottom = '16px';
+              canvas.style.borderRadius = '8px';
+              pdfContainerRef.current?.appendChild(canvas);
+            });
+          }
+        } else {
+          setFileUrl(objectUrl);
+        }
+
+        if (doc.encryptedOcrText && doc.ocrTextIv) {
+          const text = await decryptString(doc.encryptedOcrText, doc.ocrTextIv, cryptoKey);
+          setOcrText(text);
+        }
+        
+        if (doc.encryptedSummary && doc.summaryIv) {
+          const sum = await decryptString(doc.encryptedSummary, doc.summaryIv, cryptoKey);
+          setSummary(sum);
+        }
+
+        if (doc.encryptedTags && doc.tagsIv) {
+          try {
+            const tagStr = await decryptString(doc.encryptedTags, doc.tagsIv, cryptoKey);
+            setTags(JSON.parse(tagStr));
+          } catch (e) {
+            console.error('Failed to decrypt tags', e);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load document', err);
+      }
+    }
+    loadData();
+    
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [doc, cryptoKey]);
+
+  const handleRunOcr = async () => {
+    setIsProcessingOcr(true);
+    setActiveTab('ocr');
+    try {
+      const encryptedSettings = await getSettings();
+      let settings: AISettings | undefined;
+      if (encryptedSettings) {
+        const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+        settings = JSON.parse(decryptedStr);
+      }
+
+      let extractedText = '';
+      
+      if (settings?.useLlmForOcr) {
+        const imagesBase64: string[] = [];
+        if (doc.type.includes('pdf')) {
+          const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
+          if (canvases) {
+            for (const canvas of canvases) {
+              imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
+            }
+          }
+        } else if (fileUrl) {
+          const img = new Image();
+          img.src = fileUrl;
+          await new Promise((resolve) => { img.onload = resolve; });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
+          }
+        }
+        
+        if (imagesBase64.length === 0) {
+           throw new Error("No images found to extract text from.");
+        }
+        
+        extractedText = await extractTextFromImages(imagesBase64, settings);
+      } else {
+        if (doc.type.includes('pdf')) {
+          const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
+          if (canvases) {
+            for (const canvas of canvases) {
+              const text = await performOCR(canvas);
+              extractedText += text + '\n\n';
+            }
+          }
+        } else if (fileUrl) {
+          const img = new Image();
+          img.src = fileUrl;
+          await new Promise((resolve) => { img.onload = resolve; });
+          extractedText = await performOCR(img);
+        }
+      }
+      
+      setOcrText(extractedText);
+      
+      let encryptedTags = doc.encryptedTags;
+      let tagsIv = doc.tagsIv;
+      try {
+        const suggested = await suggestTags(extractedText, doc.name, settings);
+        if (suggested.length > 0) {
+          const mergedTags = Array.from(new Set([...tags, ...suggested]));
+          setTags(mergedTags);
+          const tagEncryption = await encryptString(JSON.stringify(mergedTags), cryptoKey);
+          encryptedTags = tagEncryption.encrypted;
+          tagsIv = tagEncryption.iv;
+        }
+      } catch (tagErr) {
+        console.error('Auto-tagging failed', tagErr);
+      }
+
+      // Save OCR to DB
+      const { encrypted, iv } = await encryptString(extractedText, cryptoKey);
+      const { decryptedTags, ...docToSave } = doc as any;
+      await saveDocument({
+        ...docToSave,
+        encryptedOcrText: encrypted,
+        ocrTextIv: iv,
+        encryptedTags,
+        tagsIv
+      });
+      
+    } catch (err: any) {
+      setError(err.message || 'OCR failed');
+      console.error('OCR failed', err);
+    } finally {
+      setIsProcessingOcr(false);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (!ocrText) return;
+    setIsSummarizing(true);
+    try {
+      const encryptedSettings = await getSettings();
+      let settings: AISettings;
+      if (!encryptedSettings) {
+        throw new Error('AI settings not configured.');
+      }
+      
+      const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+      settings = JSON.parse(decryptedStr);
+      
+      const res = await summarizeText(ocrText, settings);
+      setSummary(res);
+      
+      // Save summary to DB
+      const { encrypted, iv } = await encryptString(res, cryptoKey);
+      const { decryptedTags, ...docToSave } = doc as any;
+      await saveDocument({
+        ...docToSave,
+        encryptedSummary: encrypted,
+        summaryIv: iv
+      });
+      
+    } catch (err: any) {
+      setError(err.message || 'Summarization failed');
+      console.error(err);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!ocrText) {
+      if (suggestedTags.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setSuggestedTags([]);
+      }
+      return;
+    }
+    
+    async function getSuggestions() {
+      setIsAutoTagging(true);
+      try {
+        const encryptedSettings = await getSettings();
+        let settings: AISettings | undefined;
+        if (encryptedSettings) {
+          const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+          settings = JSON.parse(decryptedStr);
+        }
+        const suggestions = await suggestTags(ocrText, doc.name, settings);
+        setSuggestedTags(suggestions.filter(t => !tags.includes(t)));
+      } catch (err) {
+        console.error('Failed to get tag suggestions', err);
+      } finally {
+        setIsAutoTagging(false);
+      }
+    }
+    
+    getSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ocrText, tags, doc.name, cryptoKey]);
+
+  const handleAddTag = async (newTag: string) => {
+    const trimmed = newTag.trim();
+    if (!trimmed || tags.includes(trimmed)) return;
+    
+    const updatedTags = [...tags, trimmed];
+    setTags(updatedTags);
+    
+    try {
+      const { encrypted, iv } = await encryptString(JSON.stringify(updatedTags), cryptoKey);
+      const { decryptedTags, ...docToSave } = doc as any;
+      await saveDocument({
+        ...docToSave,
+        encryptedTags: encrypted,
+        tagsIv: iv
+      });
+    } catch (err) {
+      console.error('Failed to save tag', err);
+    }
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    const updatedTags = tags.filter(t => t !== tagToRemove);
+    setTags(updatedTags);
+    
+    try {
+      const { encrypted, iv } = await encryptString(JSON.stringify(updatedTags), cryptoKey);
+      const { decryptedTags, ...docToSave } = doc as any;
+      await saveDocument({
+        ...docToSave,
+        encryptedTags: encrypted,
+        tagsIv: iv
+      });
+    } catch (err) {
+      console.error('Failed to remove tag', err);
+    }
+  };
+
+  const exportFile = async (type: 'txt' | 'md' | 'pdf') => {
+    if (!ocrText) return;
+    
+    if (type === 'pdf') {
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF();
+      const lines = pdf.splitTextToSize(ocrText, 180);
+      let y = 15;
+      for (let i = 0; i < lines.length; i++) {
+        if (y > 280) {
+          pdf.addPage();
+          y = 15;
+        }
+        pdf.text(lines[i], 15, y);
+        y += 7;
+      }
+      pdf.save(`${doc.name}-extracted.pdf`);
+    } else {
+      const mime = type === 'md' ? 'text/markdown' : 'text/plain';
+      const blob = new Blob([ocrText], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${doc.name}-extracted.${type}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className="absolute inset-0 flex flex-col bg-[#F1F5F9] dark:bg-slate-950 font-sans"
+    >
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onClose}
+            className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">{doc.name}</h2>
+        </div>
+        
+        <div className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 p-0.5">
+          <button
+            onClick={() => setActiveTab('preview')}
+            className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
+              activeTab === 'preview' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Preview
+          </button>
+          <button
+            onClick={() => setActiveTab('ocr')}
+            className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
+              activeTab === 'ocr' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            }`}
+          >
+            <ScanText className="h-3.5 w-3.5" />
+            Extracted Data
+          </button>
+        </div>
+      </header>
+
+      {error && (
+        <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900/50 px-4 py-2 flex items-center justify-between text-xs text-red-700 dark:text-red-400">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 dark:hover:text-red-200 p-1">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
+        {/* Left Pane - Document/OCR */}
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 border-r border-slate-200 dark:border-slate-800">
+          <div className="mx-auto max-w-4xl rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
+            {activeTab === 'preview' ? (
+              <div className="min-h-[500px]">
+                {doc.type.includes('pdf') ? (
+                  <div ref={pdfContainerRef} className="flex flex-col items-center" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
+                )}
+              </div>
+            ) : (
+              <div className="min-h-[500px] p-3 text-xs text-slate-800 dark:text-slate-200">
+                {isProcessingOcr ? (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                    <Loader2 className="mb-3 h-6 w-6 animate-spin" />
+                    <p>Running local optical character recognition...</p>
+                  </div>
+                ) : ocrText ? (
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-800 pb-2">
+                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Extracted Output</span>
+                       <div className="flex gap-1.5">
+                         <button onClick={handleRunOcr} title="Re-run OCR" className="flex items-center justify-center p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300 transition-colors">
+                           <RefreshCw className="h-3.5 w-3.5" />
+                         </button>
+                         <button onClick={() => exportFile('txt')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
+                           <Download className="h-3 w-3" /> TXT
+                         </button>
+                         <button onClick={() => exportFile('md')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
+                           <Download className="h-3 w-3" /> MD
+                         </button>
+                         <button onClick={() => exportFile('pdf')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
+                           <Download className="h-3 w-3" /> PDF
+                         </button>
+                       </div>
+                    </div>
+                    <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed overflow-y-auto flex-1">{ocrText}</div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                    <ScanText className="mb-3 h-8 w-8 opacity-50" />
+                    <p className="mb-3 font-medium text-slate-700 dark:text-slate-300">No text extracted yet.</p>
+                    <button
+                      onClick={handleRunOcr}
+                      className="rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm"
+                    >
+                      EXTRACT TEXT VIA OCR
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {activeTab === 'preview' && !ocrText && !isProcessingOcr && (
+             <div className="mx-auto mt-3 flex max-w-4xl justify-center">
+                <button
+                  onClick={handleRunOcr}
+                  className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700"
+                >
+                  <ScanText className="h-4 w-4" />
+                  EXTRACT TEXT & DATA
+                </button>
+             </div>
+          )}
+        </div>
+
+        {/* Right Pane - AI Analysis */}
+        <div className="flex h-1/2 lg:h-auto w-full lg:w-96 flex-col border-t border-slate-200 dark:border-slate-800 lg:border-t-0 lg:border-l bg-white dark:bg-slate-900 shrink-0">
+          
+          {/* Document Tags Section */}
+          <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-3">
+              <Tag className="h-4 w-4 text-indigo-500" />
+              Document Tags
+            </div>
+            
+            <div className="flex flex-col gap-2.5">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                handleAddTag(tagInput);
+                setTagInput('');
+              }} className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  placeholder="Add custom tag..."
+                  className="flex-1 px-2.5 py-1.5 rounded text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                >
+                  Add
+                </button>
+              </form>
+
+              {tags.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {tags.map(t => (
+                    <span key={t} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10.5px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1 group">
+                      {t}
+                      <button
+                        onClick={() => handleRemoveTag(t)}
+                        className="text-slate-400 dark:text-slate-500 hover:text-red-500 transition-colors cursor-pointer font-bold text-xs"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">No tags assigned to this document.</span>
+              )}
+
+              {/* Suggestions Panel */}
+              {ocrText && (
+                <div className="mt-3 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Suggested Categories</span>
+                    {isAutoTagging && <Loader2 className="h-3 w-3 animate-spin text-indigo-500" />}
+                  </div>
+                  {suggestedTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {suggestedTags.map(t => (
+                        <button
+                          key={t}
+                          onClick={() => handleAddTag(t)}
+                          className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Plus className="h-3 w-3" />
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">No additional suggestions.</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+            <Brain className="h-4 w-4 text-indigo-500" />
+            AI Assistant
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4">
+            {!ocrText ? (
+              <div className="flex flex-col items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 h-full">
+                <p>Run OCR first to extract text before using AI analysis.</p>
+              </div>
+            ) : !summary && !isSummarizing ? (
+              <div className="flex flex-col items-center justify-center text-center h-full">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded bg-indigo-50 dark:bg-indigo-900/30">
+                  <Sparkles className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <h3 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">Document Insights</h3>
+                <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Generate a secure summary and extract key data points using your configured LLM.</p>
+                <button
+                  onClick={handleSummarize}
+                  className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700"
+                >
+                  GENERATE SUMMARY
+                </button>
+              </div>
+            ) : isSummarizing ? (
+              <div className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                Processing via AI...
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded p-3 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                  {summary}
+                </div>
+                
+                <button
+                  onClick={handleSummarize}
+                  className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  REGENERATE
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}

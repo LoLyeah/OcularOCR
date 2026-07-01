@@ -44,10 +44,20 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       if (encrypted) {
         try {
           const decryptedStr = await decryptString(encrypted.data, encrypted.iv, cryptoKey);
-          const parsed: AISettings = JSON.parse(decryptedStr);
+          const parsed: any = JSON.parse(decryptedStr);
+          if (parsed.provider === 'groq') {
+            parsed.provider = 'openai';
+            if (!parsed.endpoint) {
+              parsed.endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+            }
+          }
           setSettings(parsed);
           
           if (parsed.configs) {
+            if (parsed.configs.groq) {
+              parsed.configs.openai = parsed.configs.openai || parsed.configs.groq;
+              delete parsed.configs.groq;
+            }
             setProviderConfigs(parsed.configs);
           } else {
             setProviderConfigs(prev => ({
@@ -195,13 +205,13 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                         onClick={() => {
                           setSettings({ ...settings, provider: prov });
                         }}
-                        className={`rounded border py-2 text-xs font-bold capitalize transition-all ${
+                        className={`rounded border py-2 text-xs font-bold transition-all ${
                           settings.provider === prov 
                             ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
                             : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                         }`}
                       >
-                        {prov}
+                        {prov === 'gemini' ? 'Gemini' : prov === 'openai' ? 'OpenAI Compatible' : 'Ollama'}
                       </button>
                     ))}
                   </div>
@@ -211,7 +221,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                   <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Model Identifier</label>
                   <input
                     type="text"
-                    value={providerConfigs[settings.provider].model}
+                    value={providerConfigs[settings.provider]?.model || ''}
                     onChange={(e) => setProviderConfigs({
                       ...providerConfigs,
                       [settings.provider]: { ...providerConfigs[settings.provider], model: e.target.value }
@@ -226,7 +236,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     <p className="mt-1.5 text-[10px] text-slate-500">Recommended: <span className="font-bold text-slate-700 dark:text-slate-300">gemini-3.5-flash</span></p>
                   )}
                   {settings.provider === 'openai' && (
-                    <p className="mt-1.5 text-[10px] text-amber-600 font-medium">* Requirement: A vision-capable model (e.g., gpt-4o) is required for OCR.</p>
+                    <div className="mt-1.5 text-[10px] text-slate-500 space-y-1">
+                      <p>• <span className="font-bold">OpenAI:</span> A vision model like <span className="font-bold text-slate-700 dark:text-slate-300">gpt-4o</span> is required for OCR.</p>
+                      <p>• <span className="font-bold">Groq:</span> We highly recommend <span className="font-bold text-slate-700 dark:text-slate-300">meta-llama/llama-4-scout-17b-16e-instruct</span> (vision-enabled and extremely fast).</p>
+                    </div>
                   )}
                 </div>
 
@@ -235,12 +248,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">API Key</label>
                     <input
                       type="password"
-                      value={providerConfigs[settings.provider].apiKey}
+                      value={providerConfigs[settings.provider]?.apiKey || ''}
                       onChange={(e) => setProviderConfigs({
                         ...providerConfigs,
                         [settings.provider]: { ...providerConfigs[settings.provider], apiKey: e.target.value }
                       })}
-                      placeholder={`Enter your ${settings.provider} API key`}
+                      placeholder={`Enter your ${settings.provider === 'openai' ? 'OpenAI or Groq' : 'Gemini'} API key`}
                       className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                     />
                   </div>
@@ -251,14 +264,22 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">API Endpoint URL</label>
                     <input
                       type="text"
-                      value={providerConfigs[settings.provider].endpoint}
+                      value={providerConfigs[settings.provider]?.endpoint || ''}
                       onChange={(e) => setProviderConfigs({
                         ...providerConfigs,
                         [settings.provider]: { ...providerConfigs[settings.provider], endpoint: e.target.value }
                       })}
-                      placeholder={settings.provider === 'ollama' ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions'}
+                      placeholder={
+                        settings.provider === 'ollama' ? 'http://localhost:11434/v1/chat/completions' : 
+                        'https://api.openai.com/v1/chat/completions'
+                      }
                       className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                     />
+                    {settings.provider === 'openai' && (
+                      <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
+                        Leave blank for default OpenAI. For Groq, set to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[9px]">https://api.groq.com/openai/v1/chat/completions</code>
+                      </p>
+                    )}
                   </div>
                 )}
 

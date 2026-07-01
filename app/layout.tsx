@@ -3,7 +3,7 @@ import './globals.css'; // Global styles
 import { PwaHandler } from '@/components/pwa-handler';
 
 export const metadata: Metadata = {
-  title: 'Ocular AI Vault',
+  title: 'OcularOCR',
   description: 'Secure, client-side encrypted document storage and OCR processing system.',
 };
 

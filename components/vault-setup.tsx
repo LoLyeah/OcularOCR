@@ -122,9 +122,9 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
             {setupStep === 'choose_mode' ? (
               <div className="flex flex-col items-center text-center">
                 <div className="mb-4">
-                  <Image src="/icon.svg" width={64} height={64} className="rounded-2xl shadow-md select-none" alt="Ocular AI Vault" referrerPolicy="no-referrer" />
+                  <Image src="/icon.svg" width={64} height={64} className="rounded-2xl shadow-md select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
                 </div>
-                <h1 className="text-xl font-bold">Welcome to Ocular AI Vault</h1>
+                <h1 className="text-xl font-bold">Welcome to OcularOCR</h1>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
                   Choose how you want to secure your local document vault. This determines how your data will be encrypted on this device.
                 </p>
@@ -158,7 +158,7 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
               <>
                 <div className="mb-6 flex flex-col items-center text-center">
                   <div className="mb-4">
-                    <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="Ocular AI Vault" referrerPolicy="no-referrer" />
+                    <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
                   </div>
                   <h1 className="text-lg font-bold">Secure Local Vault</h1>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">

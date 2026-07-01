@@ -481,13 +481,13 @@ export function Guide() {
     {
       id: 'welcome',
       category: 'introduction',
-      title: 'Welcome to Ocular Vault',
+      title: 'Welcome to OcularOCR',
       icon: BookOpen,
       renderContent: () => (
         <div className="space-y-6">
           <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
             <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">WIKI / GETTING STARTED</span>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Ocular AI Vault Wiki</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">OcularOCR Wiki</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
               Learn how to maximize your offline-first, client-side encrypted document and OCR system.
             </p>
@@ -496,7 +496,7 @@ export function Guide() {
           <div className="p-4 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 flex gap-3 text-xs leading-relaxed text-indigo-800 dark:text-indigo-300">
             <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Zero-Knowledge Guarantee:</span> Ocular Vault operates entirely within your browser sandboxed environment. Your master passphrase never touches any remote server, and your files are encrypted locally before being stored in IndexedDB.
+              <span className="font-bold">Zero-Knowledge Guarantee:</span> OcularOCR operates entirely within your browser sandboxed environment. Your master passphrase never touches any remote server, and your files are encrypted locally before being stored in IndexedDB.
             </div>
           </div>
 
@@ -571,7 +571,7 @@ export function Guide() {
 
           <div className="space-y-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             <p>
-              The Ocular AI Vault is architected around a strict <span className="font-bold text-slate-800 dark:text-slate-200">Zero-Knowledge</span> paradigm. When you choose a master passphrase, the system does not upload or evaluate it on a central server.
+              OcularOCR is architected around a strict <span className="font-bold text-slate-800 dark:text-slate-200">Zero-Knowledge</span> paradigm. When you choose a master passphrase, the system does not upload or evaluate it on a central server.
             </p>
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">1. Key Derivation (PBKDF2)</h2>
             <p>
@@ -716,7 +716,7 @@ export function Guide() {
 
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">3. Bulk Actions (Batch Delete & Export)</h2>
             <p>
-              Ocular Vault includes an integrated batch processor:
+              OcularOCR includes an integrated batch processor:
             </p>
             <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 my-2">
               <span className="font-semibold text-slate-800 dark:text-slate-200 block mb-1">To execute bulk commands:</span>
@@ -749,7 +749,7 @@ export function Guide() {
           <div className="space-y-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">1. Local Client-Side OCR (Tesseract.js)</h2>
             <p>
-              By default, Ocular Vault uses <span className="font-bold">Tesseract.js</span> directly inside your browser. When you process a document, the application:
+              By default, OcularOCR uses <span className="font-bold">Tesseract.js</span> directly inside your browser. When you process a document, the application:
             </p>
             <ol className="list-decimal pl-5 space-y-1">
               <li>Renders document pages directly into HTML Canvas elements.</li>
@@ -782,7 +782,7 @@ export function Guide() {
             <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">OFFLINE / PWA INSTALLATION</span>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Run Offline: PWA Installation</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-              Ocular AI Vault works fully offline. You can install it on your mobile device, tablet, or computer. Once installed, it behaves like a native application—launching instantly from your home screen without requiring an internet connection.
+              OcularOCR works fully offline. You can install it on your mobile device, tablet, or computer. Once installed, it behaves like a native application—launching instantly from your home screen without requiring an internet connection.
             </p>
           </div>
 
@@ -790,7 +790,7 @@ export function Guide() {
             <div>
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">Instant Access</h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Click to install Ocular AI Vault directly onto your system.
+                Click to install OcularOCR directly onto your system.
               </p>
             </div>
             <button 
@@ -801,7 +801,7 @@ export function Guide() {
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-all shadow flex items-center justify-center gap-2 cursor-pointer self-start sm:self-auto"
             >
               <Download className="h-4 w-4" />
-              Install Ocular Vault App Now
+              Install OcularOCR App Now
             </button>
           </div>
 
@@ -812,7 +812,7 @@ export function Guide() {
                 <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded">Safari Browser</span>
               </div>
               <ol className="list-decimal pl-4 space-y-3 text-xs text-slate-600 dark:text-slate-400">
-                <li>Open <span className="font-semibold text-slate-800 dark:text-slate-200">Ocular AI Vault</span> in your Safari browser.</li>
+                <li>Open <span className="font-semibold text-slate-800 dark:text-slate-200">OcularOCR</span> in your Safari browser.</li>
                 <li>Tap the <span className="font-semibold text-slate-800 dark:text-slate-200">Share</span> button in the bottom menu bar (a square icon with an upward arrow).</li>
                 <li>Scroll down the list and tap <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Add to Home Screen&rdquo;</span>.</li>
                 <li>Confirm by tapping <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Add&rdquo;</span> in the top right corner.</li>
@@ -828,7 +828,7 @@ export function Guide() {
                 <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded">Chrome / Edge / Samsung</span>
               </div>
               <ol className="list-decimal pl-4 space-y-3 text-xs text-slate-600 dark:text-slate-400">
-                <li>Open <span className="font-semibold text-slate-800 dark:text-slate-200">Ocular AI Vault</span> in Chrome or your preferred browser.</li>
+                <li>Open <span className="font-semibold text-slate-800 dark:text-slate-200">OcularOCR</span> in Chrome or your preferred browser.</li>
                 <li>Tap the browser menu (three dots icon) or click the installation icon in the address bar.</li>
                 <li>Select <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Install app&rdquo;</span> or <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Add to Home Screen&rdquo;</span>.</li>
                 <li>Follow the prompt on your screen to complete the installation.</li>
@@ -865,7 +865,7 @@ export function Guide() {
 
           <div className="space-y-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             <p>
-              Manually typing tags for every document is tedious. Ocular Vault introduces an intelligent <span className="font-bold">Auto-Tagging Engine</span> that analyzes document content and filenames to suggest high-fidelity categories.
+              Manually typing tags for every document is tedious. OcularOCR introduces an intelligent <span className="font-bold">Auto-Tagging Engine</span> that analyzes document content and filenames to suggest high-fidelity categories.
             </p>
 
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">1. Dual Classification Architecture</h2>
@@ -952,7 +952,7 @@ export function Guide() {
 
           <div className="space-y-4 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
             <p>
-              To interact with documents (Summarize, Translate, Chat), Ocular Vault allows you to configure your personal API Keys for maximum privacy.
+              To interact with documents (Summarize, Translate, Chat), OcularOCR allows you to configure your personal API Keys for maximum privacy.
             </p>
 
             <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">1. Supported AI Providers</h2>
@@ -971,12 +971,19 @@ export function Guide() {
 
               <div className="border border-slate-200 dark:border-slate-800 rounded p-3 bg-white dark:bg-slate-900">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-slate-800 dark:text-slate-100">OpenAI API</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">OpenAI / Compatible API (OpenAI, Groq, DeepSeek)</span>
+                  <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-950/20 dark:text-indigo-400 text-[9px] rounded font-semibold uppercase tracking-wider">Universal</span>
                 </div>
-                <p className="text-slate-500 mb-2">Industrial standard compatibility. Works with gpt-4o, gpt-4o-mini, and compatible pipelines.</p>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold text-slate-400">Default Model:</span>
-                  <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 px-1 rounded text-[10px]">gpt-4o-mini</code>
+                <p className="text-slate-500 mb-2">Fully compatible with standard endpoints like OpenAI, Groq Cloud, OpenRouter, and custom endpoints.</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-400">OpenAI Default:</span>
+                    <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded">gpt-4o</code>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-slate-400">Groq Default:</span>
+                    <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded">meta-llama/llama-4-scout-17b-16e-instruct</code>
+                  </div>
                 </div>
               </div>
 
@@ -1011,13 +1018,53 @@ export function Guide() {
 {
   "provider": "google",
   "model": "gemini-3.5-flash",
-  "prompt": "Analyze the following extracted medical report context: ...",
+  "prompt": "Analyze the following extracted document text: ...",
   "documentContext": {
     "docId": "5a278efc...",
     "pageCount": 4
   }
 }`}
               </pre>
+            </div>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-6">3. API Key Creation Guides</h2>
+            <div className="space-y-4">
+              <div className="border border-slate-200 dark:border-slate-800 rounded p-4 bg-slate-50/50 dark:bg-slate-950/20">
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold">1</span>
+                  Google Gemini API Key
+                </h3>
+                <p className="text-slate-500 mb-3">Google Gemini offers generous free-tier API access, outstanding multi-page analysis, and robust optical understanding.</p>
+                <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400">
+                  <li>Navigate to the <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-medium">Google AI Studio Console</a>.</li>
+                  <li>Click on the prominent <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Create API Key&rdquo;</span> button.</li>
+                  <li>Select an existing Google Cloud Project or create a new one instantly.</li>
+                  <li>Copy your newly generated key and save it securely.</li>
+                  <li>In OcularOCR, click <span className="font-semibold text-slate-800 dark:text-slate-200">Settings</span>, select the <span className="font-bold">Gemini</span> provider, enter your key, and save.</li>
+                </ol>
+              </div>
+
+              <div className="border border-slate-200 dark:border-slate-800 rounded p-4 bg-slate-50/50 dark:bg-slate-950/20">
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold">2</span>
+                  OpenAI Compatible / Groq Cloud Setup
+                </h3>
+                <p className="text-slate-500 mb-3">Both OpenAI and Groq are fully supported. Groq is especially recommended for its record-breaking token speeds and high throughput.</p>
+                <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400 mb-3">
+                  <li>Navigate to the <a href="https://console.groq.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-medium">Groq Cloud Console</a> (or OpenAI Platform).</li>
+                  <li>In the sidebar menu, select <span className="font-semibold text-slate-800 dark:text-slate-200">API Keys</span>.</li>
+                  <li>Click <span className="font-semibold text-slate-800 dark:text-slate-200">&ldquo;Create API Key&rdquo;</span>, copy the generated key securely.</li>
+                  <li>In OcularOCR, click <span className="font-semibold text-slate-800 dark:text-slate-200">Settings</span>, select the <span className="font-bold">OpenAI Compatible</span> tab.</li>
+                  <li>Paste your key, set the endpoint to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[10px]">https://api.groq.com/openai/v1/chat/completions</code> and choose the model <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[10px]">meta-llama/llama-4-scout-17b-16e-instruct</code>.</li>
+                </ol>
+                <div className="p-3 rounded bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 text-[11px]">
+                  <span className="font-bold text-indigo-700 dark:text-indigo-400 block mb-1">💡 Recommended Model:</span>
+                  <ul className="list-disc pl-4 space-y-1 text-indigo-900/80 dark:text-indigo-300/80">
+                    <li>We highly recommend setting the model identifier to <code className="bg-white dark:bg-slate-900 px-1 py-0.5 rounded border border-indigo-100 dark:border-indigo-900/60 font-semibold text-indigo-600 dark:text-indigo-400 text-[10px]">meta-llama/llama-4-scout-17b-16e-instruct</code> on the Groq endpoint.</li>
+                    <li>This model features exceptional token speed, high-quality summary outputs, and **full multimodal vision support** for direct OCR extraction from images!</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1045,7 +1092,7 @@ export function Guide() {
                 What happens if I lose my Master Passphrase?
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Because Ocular Vault is a <span className="font-bold">Zero-Knowledge</span> system, we do not store your keys, password hashes, or recovery codes on any central server. If you lose your passphrase, <span className="text-red-500 font-semibold">your documents are permanently unrecoverable</span>. There is no password reset pipeline. Always keep your passphrase in a secure credential manager.
+                Because OcularOCR is a <span className="font-bold">Zero-Knowledge</span> system, we do not store your keys, password hashes, or recovery codes on any central server. If you lose your passphrase, <span className="text-red-500 font-semibold">your documents are permanently unrecoverable</span>. There is no password reset pipeline. Always keep your passphrase in a secure credential manager.
               </p>
             </div>
 
@@ -1087,7 +1134,7 @@ export function Guide() {
   const apiPayloadExample = {
     provider: "google",
     model: "gemini-3.5-flash",
-    prompt: "Analyze the following extracted medical report context: ...",
+    prompt: "Analyze the following extracted document text: ...",
     documentContext: {
       docId: "5a278efc...",
       pageCount: 4

@@ -43,7 +43,7 @@ export function PwaHandler() {
       setIsInstalled(true);
       setShowPrompt(false);
       setDeferredPrompt(null);
-      console.log('Ocular AI Vault installed successfully!');
+      console.log('OcularOCR installed successfully!');
     };
 
     const handleTriggerInstall = () => {
@@ -118,7 +118,7 @@ export function PwaHandler() {
         </div>
         <div className="flex-1 min-w-0">
           <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            Install Ocular AI Vault
+            Install OcularOCR
           </h4>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
             Install on your desktop or phone to run fully offline with secure local databases and instant launch speeds.

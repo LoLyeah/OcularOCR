@@ -1,6 +1,6 @@
 {
-  "name": "Ocular AI Vault",
-  "short_name": "OcularVault",
+  "name": "OcularOCR",
+  "short_name": "OcularOCR",
   "description": "Secure, client-side encrypted document storage and OCR processing system",
   "start_url": "/",
   "display": "standalone",

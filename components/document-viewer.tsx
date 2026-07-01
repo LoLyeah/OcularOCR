@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus } from 'lucide-react';
+import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DocumentEntry, getSettings, saveDocument, AISettings } from '@/lib/storage';
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR } from '@/lib/ocr';
 import { renderPdfToCanvas } from '@/lib/pdf';
 import { summarizeText, extractTextFromImages } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
+import ReactMarkdown from 'react-markdown';
+import { getTagColors } from '@/lib/utils';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -29,6 +31,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
   const [error, setError] = useState<string | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
 
@@ -192,7 +195,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
       settings = JSON.parse(decryptedStr);
       
-      const res = await summarizeText(ocrText, settings);
+      const res = await summarizeText(ocrText, settings, tags);
       setSummary(res);
       
       // Save summary to DB
@@ -433,126 +436,187 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         </div>
 
         {/* Right Pane - AI Analysis */}
-        <div className="flex h-1/2 lg:h-auto w-full lg:w-96 flex-col border-t border-slate-200 dark:border-slate-800 lg:border-t-0 lg:border-l bg-white dark:bg-slate-900 shrink-0">
+        <div className={`flex transition-all duration-300 ${isCollapsed ? 'h-11 lg:h-auto lg:w-12' : 'h-1/2 lg:h-auto w-full lg:w-96'} flex-col border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 relative overflow-hidden`}>
           
-          {/* Document Tags Section */}
-          <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-3">
-              <Tag className="h-4 w-4 text-indigo-500" />
-              Document Tags
+          {/* Header Bar Toggle */}
+          <div 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="flex h-11 items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors select-none shrink-0"
+          >
+            <div className="flex items-center gap-2">
+              <Brain className="h-4 w-4 text-indigo-500" />
+              <span className={`text-xs font-bold text-slate-700 dark:text-slate-300 ${isCollapsed ? 'lg:hidden' : ''}`}>
+                AI Assistant & Tags
+              </span>
             </div>
             
-            <div className="flex flex-col gap-2.5">
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                handleAddTag(tagInput);
-                setTagInput('');
-              }} className="flex gap-1.5">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  placeholder="Add custom tag..."
-                  className="flex-1 px-2.5 py-1.5 rounded text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer"
-                >
-                  Add
-                </button>
-              </form>
-
-              {tags.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {tags.map(t => (
-                    <span key={t} className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10.5px] font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1 group">
-                      {t}
-                      <button
-                        onClick={() => handleRemoveTag(t)}
-                        className="text-slate-400 dark:text-slate-500 hover:text-red-500 transition-colors cursor-pointer font-bold text-xs"
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  ))}
-                </div>
+            <div className="flex items-center gap-1.5">
+              {isCollapsed ? (
+                <>
+                  <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-medium mr-1 lg:hidden">
+                    Click to expand
+                  </span>
+                  <ChevronUp className="h-3.5 w-3.5 text-slate-500 lg:hidden" />
+                  <ChevronLeft className="h-3.5 w-3.5 text-slate-500 hidden lg:block" />
+                </>
               ) : (
-                <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">No tags assigned to this document.</span>
-              )}
-
-              {/* Suggestions Panel */}
-              {ocrText && (
-                <div className="mt-3 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Suggested Categories</span>
-                    {isAutoTagging && <Loader2 className="h-3 w-3 animate-spin text-indigo-500" />}
-                  </div>
-                  {suggestedTags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {suggestedTags.map(t => (
-                        <button
-                          key={t}
-                          onClick={() => handleAddTag(t)}
-                          className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-colors cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                          {t}
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">No additional suggestions.</span>
-                  )}
-                </div>
+                <>
+                  <ChevronDown className="h-3.5 w-3.5 text-slate-500 lg:hidden" />
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-500 hidden lg:block" />
+                </>
               )}
             </div>
           </div>
 
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-            <Brain className="h-4 w-4 text-indigo-500" />
-            AI Assistant
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4">
-            {!ocrText ? (
-              <div className="flex flex-col items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 h-full">
-                <p>Run OCR first to extract text before using AI analysis.</p>
+          {/* Desktop Collapsed View */}
+          {isCollapsed && (
+            <div 
+              onClick={() => setIsCollapsed(false)}
+              className="hidden lg:flex flex-col items-center justify-center flex-1 py-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/20 transition-colors gap-4 select-none text-slate-400 dark:text-slate-500"
+            >
+              <Brain className="h-5 w-5 text-indigo-500" />
+              <ChevronLeft className="h-4 w-4 text-indigo-500" />
+              <div className="text-[9px] font-bold uppercase tracking-widest text-center [writing-mode:vertical-lr] rotate-180 mt-2 text-slate-500 dark:text-slate-400">
+                EXPAND PANEL
               </div>
-            ) : !summary && !isSummarizing ? (
-              <div className="flex flex-col items-center justify-center text-center h-full">
-                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded bg-indigo-50 dark:bg-indigo-900/30">
-                  <Sparkles className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+            </div>
+          )}
+
+          {/* Scrollable Content (Hidden when collapsed) */}
+          <div className={`flex-1 flex flex-col overflow-y-auto ${isCollapsed ? 'hidden lg:hidden' : 'flex'}`}>
+            {/* Document Tags Section */}
+            <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-3">
+                <Tag className="h-4 w-4 text-indigo-500" />
+                Document Tags
+              </div>
+              
+              <div className="flex flex-col gap-2.5">
+                <form onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAddTag(tagInput);
+                  setTagInput('');
+                }} className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    placeholder="Add custom tag..."
+                    className="flex-1 px-2.5 py-1.5 rounded text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                  >
+                    Add
+                  </button>
+                </form>
+
+                {tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {tags.map(t => (
+                      <span key={t} className={`px-2 py-0.5 rounded border text-[10.5px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}>
+                        {t}
+                        <button
+                          onClick={() => handleRemoveTag(t)}
+                          className="hover:text-red-500 transition-colors cursor-pointer font-bold text-xs"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">No tags assigned to this document.</span>
+                )}
+
+                {/* Suggestions Panel */}
+                {ocrText && (
+                  <div className="mt-3 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Suggested Categories</span>
+                      {isAutoTagging && <Loader2 className="h-3 w-3 animate-spin text-indigo-500" />}
+                    </div>
+                    {suggestedTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {suggestedTags.map(t => (
+                          <button
+                            key={t}
+                            onClick={() => handleAddTag(t)}
+                            className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3" />
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">No additional suggestions.</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+              <Brain className="h-4 w-4 text-indigo-500" />
+              AI Assistant
+            </div>
+            
+            <div className="flex-1 overflow-visible lg:overflow-y-auto p-4">
+              {!ocrText ? (
+                <div className="flex flex-col items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 min-h-[120px] lg:h-full">
+                  <p>Run OCR first to extract text before using AI analysis.</p>
                 </div>
-                <h3 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">Document Insights</h3>
-                <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Generate a secure summary and extract key data points using your configured LLM.</p>
-                <button
-                  onClick={handleSummarize}
-                  className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700"
-                >
-                  GENERATE SUMMARY
-                </button>
-              </div>
-            ) : isSummarizing ? (
-              <div className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
-                <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-                Processing via AI...
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded p-3 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                  {summary}
+              ) : !summary && !isSummarizing ? (
+                <div className="flex flex-col items-center justify-center text-center min-h-[160px] lg:h-full">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded bg-indigo-50 dark:bg-indigo-900/30">
+                    <Sparkles className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <h3 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">Document Insights</h3>
+                  <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Generate a secure summary and extract key data points using your configured LLM.</p>
+                  <button
+                    onClick={handleSummarize}
+                    className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
+                  >
+                    GENERATE SUMMARY
+                  </button>
                 </div>
-                
-                <button
-                  onClick={handleSummarize}
-                  className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  REGENERATE
-                </button>
-              </div>
-            )}
+              ) : isSummarizing ? (
+                <div className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                  <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                  Processing via AI...
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded p-4 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({node, ...props}) => <h1 className="text-xs font-bold text-slate-900 dark:text-slate-100 mt-3 mb-1 first:mt-0 uppercase tracking-wider" {...props} />,
+                        h2: ({node, ...props}) => <h2 className="text-[11px] font-bold text-slate-900 dark:text-slate-100 mt-2.5 mb-1 uppercase tracking-wider" {...props} />,
+                        h3: ({node, ...props}) => <h3 className="text-[10.5px] font-semibold text-slate-800 dark:text-slate-200 mt-2 mb-1" {...props} />,
+                        p: ({node, ...props}) => <p className="mb-2 last:mb-0 text-slate-700 dark:text-slate-300 leading-relaxed" {...props} />,
+                        ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1 text-slate-700 dark:text-slate-300" {...props} />,
+                        ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-2 space-y-1 text-slate-700 dark:text-slate-300" {...props} />,
+                        li: ({node, ...props}) => <li className="mb-0.5" {...props} />,
+                        strong: ({node, ...props}) => <strong className="font-bold text-slate-900 dark:text-slate-100" {...props} />,
+                        code: ({node, ...props}) => <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px] font-mono text-indigo-600 dark:text-indigo-400" {...props} />,
+                      }}
+                    >
+                      {summary}
+                    </ReactMarkdown>
+                  </div>
+                  
+                  <button
+                    onClick={handleSummarize}
+                    className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    REGENERATE
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -1,8 +1,11 @@
 import { AISettings } from './storage';
 import { GoogleGenAI } from '@google/genai';
 
-export async function summarizeText(text: string, settings: AISettings): Promise<string> {
-  const prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
+export async function summarizeText(text: string, settings: AISettings, tags?: string[]): Promise<string> {
+  let prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
+  if (tags && tags.length > 0) {
+    prompt = `Document Tags/Categories: ${tags.join(', ')}\n\nPlease provide a concise summary and extract key data points from the following document text, utilizing the tags to provide more accurate context and focus for the analysis:\n\n${text}`;
+  }
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -13,10 +16,14 @@ export async function summarizeText(text: string, settings: AISettings): Promise
     return response.text || 'No summary generated.';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
     const isOllama = settings.provider === 'ollama';
-    let endpoint = settings.endpoint || (isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions');
+    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    
+    let endpoint = settings.endpoint || defaultEndpoint;
     if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
       endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
     }
+    const isGroq = endpoint.includes('groq.com');
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -25,7 +32,7 @@ export async function summarizeText(text: string, settings: AISettings): Promise
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : 'gpt-4o'),
+      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
       messages: [{ role: 'user', content: prompt }]
     };
 
@@ -65,10 +72,14 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     return response.text || '';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
     const isOllama = settings.provider === 'ollama';
-    let endpoint = settings.endpoint || (isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions');
+    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+
+    let endpoint = settings.endpoint || defaultEndpoint;
     if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
       endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
     }
+    const isGroq = endpoint.includes('groq.com');
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -82,7 +93,7 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : 'gpt-4o'),
+      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
       messages: [{ role: 'user', content: contentArray }]
     };
 

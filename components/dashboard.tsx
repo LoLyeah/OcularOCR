@@ -23,8 +23,8 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
       <header className="h-12 flex items-center justify-between px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <Image src="/icon.svg" width={28} height={28} className="rounded-md select-none" alt="Ocular AI Vault logo" referrerPolicy="no-referrer" />
-            <span className="font-bold tracking-tight text-sm">Ocular AI <span className="text-indigo-600 dark:text-indigo-400 font-medium text-[10px] ml-1 px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 rounded border border-indigo-100 dark:border-indigo-800 uppercase tracking-widest">Vault</span></span>
+            <Image src="/icon.svg" width={28} height={28} className="rounded-md select-none" alt="OcularOCR logo" referrerPolicy="no-referrer" />
+            <span className="font-bold tracking-tight text-sm">OcularOCR</span>
           </div>
           
           <nav className="flex gap-1 ml-6">

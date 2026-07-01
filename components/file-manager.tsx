@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X } from 'lucide-react';
+import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe } from 'lucide-react';
 import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings } from '@/lib/storage';
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
 import { renderPdfToCanvas } from '@/lib/pdf';
 import { performOCR } from '@/lib/ocr';
 import { extractTextFromImages } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
+import { getTagColors } from '@/lib/utils';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -30,6 +31,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [customAlert, setCustomAlert] = useState<{ title: string; message: string } | null>(null);
+
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [downloadUrl, setDownloadUrl] = useState('');
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   const loadDocs = async () => {
     const list = await listDocuments();
@@ -70,14 +78,28 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     return () => { active = false; };
   }, [cryptoKey]);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const processFiles = async (fileList: FileList | File[]) => {
+    if (!fileList || fileList.length === 0) return;
 
     setIsUploading(true);
     try {
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
+        
+        // Supported types validation
+        const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+        const isImage = file.type.startsWith('image/') && (
+          file.type.includes('png') || file.type.includes('jpeg') || file.type.includes('webp') || file.type.includes('jpg')
+        );
+
+        if (!isPdf && !isImage) {
+          setCustomAlert({
+            title: "Unsupported File Format",
+            message: `"${file.name}" is not supported. Please upload PDFs or PNG/JPEG/WebP images.`
+          });
+          continue;
+        }
+
         const buffer = await file.arrayBuffer();
         const { encrypted, iv } = await encryptBuffer(buffer, cryptoKey);
         
@@ -97,6 +119,108 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      await processFiles(files);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current <= 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processFiles(files);
+    }
+  };
+
+  const handleImportFromUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!downloadUrl || !downloadUrl.trim()) return;
+    
+    setIsDownloading(true);
+    try {
+      const proxyUrl = `/api/proxy?url=${encodeURIComponent(downloadUrl.trim())}`;
+      const response = await fetch(proxyUrl);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => ({}));
+        throw new Error(errorJson.error || `Server returned status ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      const contentType = blob.type || 'application/octet-stream';
+      
+      let fileName = 'Downloaded_File';
+      try {
+        const urlObj = new URL(downloadUrl.trim());
+        const pathname = urlObj.pathname;
+        const lastPart = pathname.substring(pathname.lastIndexOf('/') + 1);
+        if (lastPart && lastPart.includes('.')) {
+          fileName = decodeURIComponent(lastPart);
+        } else {
+          if (contentType.includes('pdf')) fileName = 'document.pdf';
+          else if (contentType.includes('webp')) fileName = 'image.webp';
+          else if (contentType.includes('png')) fileName = 'image.png';
+          else if (contentType.includes('jpeg') || contentType.includes('jpg')) fileName = 'image.jpg';
+        }
+      } catch (err) {
+        console.error('Failed to parse filename from URL', err);
+      }
+      
+      const buffer = await blob.arrayBuffer();
+      const { encrypted, iv } = await encryptBuffer(buffer, cryptoKey);
+      
+      const doc: DocumentEntry = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        type: contentType,
+        createdAt: Date.now(),
+        iv,
+        encryptedData: encrypted,
+      };
+      
+      await saveDocument(doc);
+      setDownloadUrl('');
+      setShowUrlInput(false);
+      await loadDocs();
+    } catch (err: any) {
+      console.error('Import from URL failed', err);
+      setCustomAlert({
+        title: "Import Failed",
+        message: err.message || "Failed to import file from URL. Ensure it is a direct download link and supported format."
+      });
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -462,8 +586,31 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative"
     >
+      {isDragging && (
+        <div className="absolute inset-0 z-50 bg-indigo-50/95 dark:bg-slate-900/98 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center transition-all duration-200">
+          <div className="border-2 border-dashed border-indigo-500 dark:border-indigo-400 w-full h-full rounded-xl flex flex-col items-center justify-center p-8 pointer-events-none">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+              <UploadCloud className="h-8 w-8 animate-bounce" />
+            </div>
+            <p className="text-base font-bold text-indigo-900 dark:text-indigo-200">
+              Drop files here to encrypt & store securely
+            </p>
+            <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
+              Supported formats: PDF, PNG, JPEG, WebP
+            </p>
+            <div className="mt-4 flex items-center gap-1.5 text-[10.5px] bg-indigo-100/50 dark:bg-indigo-950/30 px-3 py-1 rounded text-indigo-700 dark:text-indigo-300 font-mono">
+              <span>All operations are 100% client-side & private</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
         <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Your Secure Documents</h2>
         <div className="flex gap-2">
@@ -475,9 +622,20 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             className="text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white px-3 py-1 rounded w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           <button
+            onClick={() => setShowUrlInput(!showUrlInput)}
+            className={`px-3 py-1 text-xs font-bold rounded shadow-sm flex items-center gap-2 border transition-colors cursor-pointer ${
+              showUrlInput 
+                ? 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-700' 
+                : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+            }`}
+          >
+            <Link className="h-3 w-3" />
+            ADD FROM URL
+          </button>
+          <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm flex items-center gap-2 disabled:opacity-50"
+            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <UploadCloud className="h-3 w-3" />
             {isUploading ? 'ENCRYPTING...' : 'IMPORT FILE'}
@@ -493,6 +651,38 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
         </div>
       </div>
 
+      {showUrlInput && (
+        <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3">
+          <form onSubmit={handleImportFromUrl} className="flex gap-2 max-w-2xl mx-auto">
+            <div className="relative flex-1">
+              <Globe className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+              <input
+                type="url"
+                required
+                placeholder="Enter direct file link (e.g., https://example.com/file.pdf)"
+                value={downloadUrl}
+                onChange={e => setDownloadUrl(e.target.value)}
+                className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isDownloading}
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  IMPORTING...
+                </>
+              ) : (
+                'DOWNLOAD & ENCRYPT'
+              )}
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {isProcessingBulk && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
@@ -505,12 +695,24 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
         )}
         
         {docs.length === 0 ? (
-          <div className="mt-20 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded bg-slate-100 dark:bg-slate-800">
-              <File className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+          <div className="mt-16 px-4 flex flex-col items-center justify-center">
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="max-w-lg mx-auto w-full border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 group"
+            >
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950 text-slate-400 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                <UploadCloud className="h-7 w-7 animate-pulse" />
+              </div>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                Drag & drop files here, or click to browse
+              </p>
+              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                Supports PDF documents or PNG, JPEG, WebP images
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 dark:text-slate-400 font-mono">
+                <span>100% Client-Side Encryption (AES-GCM-256)</span>
+              </div>
             </div>
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">No documents securely stored</p>
-            <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Import PDFs or images to extract data securely.</p>
           </div>
         ) : (
           <div className="flex flex-col h-full">
@@ -579,9 +781,9 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1">
                         {doc.decryptedTags?.map(t => (
-                          <span key={t} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[10px] text-slate-600 dark:text-slate-300 flex items-center gap-1 group">
+                          <span key={t} className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}>
                             {t}
-                            <button onClick={(e) => handleRemoveTag(e, doc, t)} className="text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => handleRemoveTag(e, doc, t)} className="hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
                               &times;
                             </button>
                           </span>

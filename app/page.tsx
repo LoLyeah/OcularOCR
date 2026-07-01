@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { VaultSetup } from '@/components/vault-setup';
 import { Dashboard } from '@/components/dashboard';
 import { getSalt } from '@/lib/storage';
+import { AnimatePresence } from 'motion/react';
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -21,9 +22,14 @@ export default function Home() {
     );
   }
 
-  if (!cryptoKey) {
-    return <VaultSetup onUnlock={setCryptoKey} />;
-  }
-
-  return <Dashboard cryptoKey={cryptoKey} onLock={() => setCryptoKey(null)} />;
+  return (
+    <AnimatePresence mode="wait">
+      {!cryptoKey ? (
+        <VaultSetup key="setup" onUnlock={setCryptoKey} />
+      ) : (
+        <Dashboard key="dashboard" cryptoKey={cryptoKey} onLock={() => setCryptoKey(null)} />
+      )}
+    </AnimatePresence>
+  );
 }
+

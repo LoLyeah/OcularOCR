@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DocumentEntry, getSettings, saveDocument, AISettings } from '@/lib/storage';
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
@@ -9,6 +9,8 @@ import { summarizeText, extractTextFromImages } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
 import { getTagColors } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useToast } from './toast';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -61,6 +63,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [ocrViewMode, setOcrViewMode] = useState<'single' | 'all'>('single');
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   useEffect(() => {
     let objectUrl: string;
@@ -202,7 +206,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         encryptedTags,
         tagsIv
       });
-      
+      toast({
+        title: "Text extracted successfully",
+        variant: "success"
+      });
     } catch (err: any) {
       setError(err.message || 'OCR failed');
       console.error('OCR failed', err);
@@ -235,7 +242,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         encryptedSummary: encrypted,
         summaryIv: iv
       });
-      
+      toast({
+        title: "Summary generated",
+        variant: "success"
+      });
     } catch (err: any) {
       setError(err.message || 'Summarization failed');
       console.error(err);
@@ -247,7 +257,6 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   useEffect(() => {
     if (!ocrText) {
       if (suggestedTags.length > 0) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSuggestedTags([]);
       }
       return;
@@ -290,6 +299,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         encryptedTags: encrypted,
         tagsIv: iv
       });
+      toast({
+        title: `Tag "${trimmed}" added`,
+        variant: "success"
+      });
     } catch (err) {
       console.error('Failed to save tag', err);
     }
@@ -306,6 +319,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         ...docToSave,
         encryptedTags: encrypted,
         tagsIv: iv
+      });
+      toast({
+        title: "Tag removed",
+        variant: "success"
       });
     } catch (err) {
       console.error('Failed to remove tag', err);
@@ -371,7 +388,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       a.click();
       URL.revokeObjectURL(url);
     }
+    toast({
+      title: `${type.toUpperCase()} exported successfully`,
+      variant: "success"
+    });
   };
+
+  const parsedOcrPagesList = parseOcrPages(ocrText);
+  const activeOcrPageText = parsedOcrPagesList.find(p => p.pageNumber === selectedOcrPage)?.text || ocrText;
 
   return (
     <motion.div 
@@ -381,235 +405,217 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       className="absolute inset-0 flex flex-col bg-[#F1F5F9] dark:bg-slate-950 font-sans"
     >
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4">
+      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 z-10">
         <div className="flex items-center gap-4">
           <button
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+            aria-label="Go back to files"
+            className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">{doc.name}</h2>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate max-w-[200px] sm:max-w-xs">{doc.name}</h2>
         </div>
         
-        <div className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 p-0.5">
+        <div className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 p-0.5 relative">
           <button
             onClick={() => setActiveTab('preview')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
-              activeTab === 'preview' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            className={`relative flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'preview' ? 'text-slate-800 dark:text-slate-100 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <FileText className="h-3.5 w-3.5" />
-            Preview
+            {activeTab === 'preview' && (
+              <motion.div
+                layoutId="doc-active-tab"
+                className="absolute inset-0 bg-white dark:bg-slate-700 rounded shadow-sm z-0"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Preview
+            </span>
           </button>
           <button
             onClick={() => setActiveTab('ocr')}
-            className={`flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors ${
-              activeTab === 'ocr' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            className={`relative flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+              activeTab === 'ocr' ? 'text-slate-800 dark:text-slate-100 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
-            <ScanText className="h-3.5 w-3.5" />
-            Extracted Data
+            {activeTab === 'ocr' && (
+              <motion.div
+                layoutId="doc-active-tab"
+                className="absolute inset-0 bg-white dark:bg-slate-700 rounded shadow-sm z-0"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              <ScanText className="h-3.5 w-3.5" />
+              Extracted Data
+            </span>
           </button>
         </div>
       </header>
 
-      {error && (
-        <div className="bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900/50 px-4 py-2 flex items-center justify-between text-xs text-red-700 dark:text-red-400">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 dark:hover:text-red-200 p-1">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            role="alert"
+            className="bg-red-50 dark:bg-red-950/30 border-b border-red-100 dark:border-red-900/50 px-4 py-2 flex items-center justify-between text-xs text-red-700 dark:text-red-400 overflow-hidden"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 dark:hover:text-red-200 p-1 cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* Left Pane - Document/OCR */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 border-r border-slate-200 dark:border-slate-800">
-          <div className="mx-auto max-w-4xl rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
-            {activeTab === 'preview' ? (
-              <div className="min-h-[500px]">
-                {doc.type.includes('pdf') ? (
-                  <div ref={pdfContainerRef} className="flex flex-col items-center" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
-                )}
-              </div>
-            ) : (
-              <div className="min-h-[500px] p-3 text-xs text-slate-800 dark:text-slate-200">
-                {isProcessingOcr ? (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
-                    <Loader2 className="mb-3 h-6 w-6 animate-spin" />
-                    <p>Running local optical character recognition...</p>
-                  </div>
-                ) : ocrText ? (
-                  <div className="flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-800 pb-2">
-                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Extracted Output</span>
-                       <div className="flex gap-1.5">
-                         <button onClick={handleRunOcr} title="Re-run OCR" className="flex items-center justify-center p-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300 transition-colors">
-                           <RefreshCw className="h-3.5 w-3.5" />
-                         </button>
-                         <button onClick={() => exportFile('txt')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
-                           <Download className="h-3 w-3" /> TXT
-                         </button>
-                         <button onClick={() => exportFile('md')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
-                           <Download className="h-3 w-3" /> MD
-                         </button>
-                         <button onClick={() => exportFile('pdf')} className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 transition-colors">
-                           <Download className="h-3 w-3" /> PDF
-                         </button>
-                       </div>
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 border-r border-slate-200 dark:border-slate-800 custom-scrollbar">
+          <div className="mx-auto max-w-4xl rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm overflow-hidden">
+            <AnimatePresence mode="wait">
+              {activeTab === 'preview' ? (
+                <motion.div
+                  key="preview"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.15 }}
+                  className="min-h-[500px]"
+                >
+                  {doc.type.includes('pdf') ? (
+                    <div ref={pdfContainerRef} className="flex flex-col items-center" />
+                  ) : (
+                    fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
+                  )}
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="ocr"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.15 }}
+                  className="min-h-[500px] p-1 sm:p-3 text-xs text-slate-800 dark:text-slate-200"
+                >
+                  {isProcessingOcr ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                      <Loader2 className="mb-3 h-6 w-6 animate-spin" />
+                      <p>Running local optical character recognition...</p>
                     </div>
-                    {(() => {
-                      const pages = parseOcrPages(ocrText);
-                      if (pages.length <= 1) {
-                        return (
-                          <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed overflow-y-auto flex-1 bg-slate-50 dark:bg-slate-950/40 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
-                            {ocrText}
-                          </div>
-                        );
-                      }
-                      
-                      const selectedPageData = pages.find(p => p.pageNumber === selectedOcrPage) || pages[0];
-                      
-                      return (
-                        <div className="flex flex-col h-full gap-3">
-                          {/* Page Selection Controls */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-150 dark:border-slate-800">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Page View:</span>
-                              <div className="flex rounded-md bg-white dark:bg-slate-900 p-0.5 border border-slate-200 dark:border-slate-700">
-                                <button
-                                  type="button"
-                                  onClick={() => setOcrViewMode('single')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                                    ocrViewMode === 'single'
-                                      ? 'bg-indigo-600 text-white shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                                  }`}
-                                >
-                                  Single Page
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setOcrViewMode('all')}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
-                                    ocrViewMode === 'all'
-                                      ? 'bg-indigo-600 text-white shadow-sm'
-                                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-                                  }`}
-                                >
-                                  All Pages
-                                </button>
-                              </div>
-                            </div>
-
-                            {ocrViewMode === 'single' && (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={selectedOcrPage <= 1}
-                                  onClick={() => setSelectedOcrPage(prev => Math.max(1, prev - 1))}
-                                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-600 dark:text-slate-400 transition-colors"
-                                >
-                                  <ChevronLeft className="h-4 w-4" />
-                                </button>
-                                
-                                <select
-                                  value={selectedOcrPage}
-                                  onChange={(e) => setSelectedOcrPage(Number(e.target.value))}
-                                  className="text-[10.5px] font-medium bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                                >
-                                  {pages.map(p => (
-                                    <option key={p.pageNumber} value={p.pageNumber}>
-                                      Page {p.pageNumber}
-                                    </option>
-                                  ))}
-                                </select>
-                                
-                                <span className="text-[10.5px] text-slate-400 dark:text-slate-500 font-medium">
-                                  of {pages.length}
-                                </span>
-
-                                <button
-                                  type="button"
-                                  disabled={selectedOcrPage >= pages.length}
-                                  onClick={() => setSelectedOcrPage(prev => Math.min(pages.length, prev + 1))}
-                                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-40 text-slate-600 dark:text-slate-400 transition-colors"
-                                >
-                                  <ChevronRight className="h-4 w-4" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Content Panel */}
-                          <div className="flex-1 overflow-y-auto min-h-[350px]">
-                            {ocrViewMode === 'single' ? (
-                              <div className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-lg border border-slate-100 dark:border-slate-800 h-full">
-                                <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b border-indigo-100/40 dark:border-indigo-900/40 pb-1.5 mb-3 font-mono">
-                                  --- PAGE {selectedPageData.pageNumber} ---
-                                </div>
-                                <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
-                                  {selectedPageData.text || <span className="italic text-slate-400">No text detected on this page.</span>}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-4">
-                                {pages.map(p => (
-                                  <div key={p.pageNumber} className="bg-slate-50 dark:bg-slate-950/40 p-4 rounded-lg border border-slate-100 dark:border-slate-800">
-                                    <div className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest border-b border-indigo-100/40 dark:border-indigo-900/40 pb-1.5 mb-3 font-mono">
-                                      --- PAGE {p.pageNumber} ---
-                                    </div>
-                                    <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-800 dark:text-slate-200">
-                                      {p.text || <span className="italic text-slate-400">No text detected on this page.</span>}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                  ) : ocrText ? (
+                    <div className="flex flex-col h-full gap-4">
+                      {/* OCR Toolbar */}
+                      <div className="flex flex-wrap items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 gap-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setOcrViewMode('single')}
+                            className={`px-2.5 py-1 text-[10.5px] font-bold rounded transition-colors cursor-pointer ${
+                              ocrViewMode === 'single' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            }`}
+                          >
+                            Single Page
+                          </button>
+                          <button
+                            onClick={() => setOcrViewMode('all')}
+                            className={`px-2.5 py-1 text-[10.5px] font-bold rounded transition-colors cursor-pointer ${
+                              ocrViewMode === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            }`}
+                          >
+                            All Extracted Text
+                          </button>
                         </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
-                    <ScanText className="mb-3 h-8 w-8 opacity-50" />
-                    <p className="mb-3 font-medium text-slate-700 dark:text-slate-300">No text extracted yet.</p>
-                    <button
-                      onClick={handleRunOcr}
-                      className="rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 shadow-sm"
-                    >
-                      EXTRACT TEXT VIA OCR
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+                        
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono text-slate-400 mr-2">Export format:</span>
+                          {(['txt', 'md', 'pdf'] as const).map(type => (
+                            <button
+                              key={type}
+                              onClick={() => exportFile(type)}
+                              className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Download className="h-3 w-3" />
+                              {type.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Pagination if single view mode */}
+                      {ocrViewMode === 'single' && parsedOcrPagesList.length > 1 && (
+                        <div className="flex items-center gap-1.5 self-center bg-slate-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800">
+                          <button
+                            disabled={selectedOcrPage === 1}
+                            onClick={() => setSelectedOcrPage(prev => Math.max(1, prev - 1))}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-30 cursor-pointer"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="text-[10.5px] font-bold text-slate-600 dark:text-slate-300">
+                            Page {selectedOcrPage} of {parsedOcrPagesList.length}
+                          </span>
+                          <button
+                            disabled={selectedOcrPage === parsedOcrPagesList.length}
+                            onClick={() => setSelectedOcrPage(prev => Math.min(parsedOcrPagesList.length, prev + 1))}
+                            className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-30 cursor-pointer"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Text Display Canvas */}
+                      <pre className="flex-1 p-4 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 rounded border border-slate-100 dark:border-slate-800 font-mono text-[11px] leading-relaxed whitespace-pre-wrap select-text selection:bg-indigo-100 dark:selection:bg-indigo-900/50 custom-scrollbar">
+                        {ocrViewMode === 'single' ? activeOcrPageText : ocrText}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
+                      <p className="mb-4">No text data available for this document.</p>
+                      <button
+                        onClick={handleRunOcr}
+                        className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
+                      >
+                        <ScanText className="h-4 w-4" />
+                        Extract Text & Data
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
           {activeTab === 'preview' && !ocrText && !isProcessingOcr && (
              <div className="mx-auto mt-3 flex max-w-4xl justify-center">
                 <button
                   onClick={handleRunOcr}
-                  className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700"
+                  className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
                 >
                   <ScanText className="h-4 w-4" />
-                  EXTRACT TEXT & DATA
+                  Extract Text & Data
                 </button>
              </div>
           )}
         </div>
 
-        {/* Right Pane - AI Analysis */}
-        <div className={`flex transition-all duration-300 ${isCollapsed ? 'h-11 lg:h-auto lg:w-12' : 'h-1/2 lg:h-auto w-full lg:w-96'} flex-col border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 relative overflow-hidden`}>
-          
+        {/* Right Pane - AI Analysis / Bottom Sheet on Mobile */}
+        <motion.div 
+          animate={{ 
+            width: isMobile ? '100%' : (isCollapsed ? 48 : 384),
+            height: isMobile ? (isCollapsed ? 44 : '60%') : '100%' 
+          }}
+          transition={{ type: 'spring', damping: 26, stiffness: 220 }}
+          className="flex flex-col border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 relative overflow-hidden"
+        >
           {/* Header Bar Toggle */}
           <div 
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -655,7 +661,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           )}
 
           {/* Scrollable Content (Hidden when collapsed) */}
-          <div className={`flex-1 flex flex-col overflow-y-auto ${isCollapsed ? 'hidden lg:hidden' : 'flex'}`}>
+          <div className={`flex-1 flex flex-col overflow-y-auto custom-scrollbar ${isCollapsed ? 'hidden lg:hidden' : 'flex'}`}>
             {/* Document Tags Section */}
             <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-3">
@@ -686,17 +692,25 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
 
                 {tags.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {tags.map(t => (
-                      <span key={t} className={`px-2 py-0.5 rounded border text-[10.5px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}>
-                        {t}
-                        <button
-                          onClick={() => handleRemoveTag(t)}
-                          className="hover:text-red-500 transition-colors cursor-pointer font-bold text-xs"
+                    <AnimatePresence initial={false}>
+                      {tags.map(t => (
+                        <motion.span 
+                          initial={{ scale: 0.8, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          exit={{ scale: 0.8, opacity: 0 }}
+                          key={t} 
+                          className={`px-2 py-0.5 rounded border text-[10.5px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}
                         >
-                          &times;
-                        </button>
-                      </span>
-                    ))}
+                          {t}
+                          <button
+                            onClick={() => handleRemoveTag(t)}
+                            className="hover:text-red-500 transition-colors cursor-pointer font-bold text-xs"
+                          >
+                            &times;
+                          </button>
+                        </motion.span>
+                      ))}
+                    </AnimatePresence>
                   </div>
                 ) : (
                   <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">No tags assigned to this document.</span>
@@ -711,16 +725,21 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     </div>
                     {suggestedTags.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {suggestedTags.map(t => (
-                          <button
-                            key={t}
-                            onClick={() => handleAddTag(t)}
-                            className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <Plus className="h-3 w-3" />
-                            {t}
-                          </button>
-                        ))}
+                        <AnimatePresence>
+                          {suggestedTags.map(t => (
+                            <motion.button
+                              initial={{ scale: 0.8, opacity: 0 }}
+                              animate={{ scale: 1, opacity: 1 }}
+                              exit={{ scale: 0.8, opacity: 0 }}
+                              key={t}
+                              onClick={() => handleAddTag(t)}
+                              className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3" />
+                              {t}
+                            </motion.button>
+                          ))}
+                        </AnimatePresence>
                       </div>
                     ) : (
                       <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">No additional suggestions.</span>
@@ -751,7 +770,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     onClick={handleSummarize}
                     className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
                   >
-                    GENERATE SUMMARY
+                    Generate Summary
                   </button>
                 </div>
               ) : isSummarizing ? (
@@ -781,16 +800,16 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   
                   <button
                     onClick={handleSummarize}
-                    className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    REGENERATE
+                    Regenerate Summary
                   </button>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </motion.div>
   );

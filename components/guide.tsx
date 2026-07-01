@@ -24,9 +24,13 @@ import {
   Smartphone,
   Download,
   Tag,
-  Eye
+  Eye,
+  Menu,
+  X
 } from 'lucide-react';
 import { getSalt } from '@/lib/storage';
+import { useIsMobile } from '@/hooks/use-mobile';
+
 
 interface Article {
   id: string;
@@ -1153,6 +1157,8 @@ export function Guide() {
   });
 
   const activeArticle = articles.find(a => a.id === activeArticleId) || articles[0];
+  const isMobile = useIsMobile();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <motion.div 
@@ -1160,74 +1166,172 @@ export function Guide() {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.2 }}
-      className="flex h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden"
+      className="flex flex-col md:flex-row h-full w-full bg-slate-50 dark:bg-slate-950 overflow-hidden"
     >
-      {/* Wiki Navigation Sidebar */}
-      <div className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search Vault Wiki..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-xs focus:outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-200"
-            />
+      {/* Mobile Top Bar */}
+      <div className="flex h-11 items-center gap-3 px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 md:hidden z-10">
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+        <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest truncate">
+          {activeArticle.title}
+        </span>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile Drawer Sidebar */}
+        <AnimatePresence>
+          {isSidebarOpen && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsSidebarOpen(false)}
+                className="absolute inset-0 z-30 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm md:hidden"
+              />
+              {/* Drawer */}
+              <motion.div
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                className="absolute left-0 top-0 bottom-0 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-40 flex flex-col md:hidden"
+              >
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Vault Guide</span>
+                  <button 
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Search Vault Wiki..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-xs focus:outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-200"
+                    />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                  {categories.map((cat) => {
+                    const catArticles = filteredArticles.filter(a => a.category === cat.id);
+                    if (catArticles.length === 0) return null;
+                    return (
+                      <div key={cat.id} className="space-y-1">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2.5 block mb-1">
+                          {cat.label}
+                        </span>
+                        {catArticles.map((article) => {
+                          const Icon = article.icon;
+                          const isActive = activeArticleId === article.id;
+                          return (
+                            <button
+                              key={article.id}
+                              onClick={() => {
+                                setActiveArticleId(article.id);
+                                setIsSidebarOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between text-left px-2.5 py-1.5 rounded text-xs transition-all cursor-pointer ${
+                                isActive 
+                                  ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-l-2 border-indigo-600 dark:border-indigo-400' 
+                                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 truncate">
+                                <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
+                                <span className="truncate">{article.title}</span>
+                              </div>
+                              <ChevronRight className={`h-3 w-3 shrink-0 opacity-0 transition-opacity ${isActive ? 'opacity-100 text-indigo-500' : ''}`} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Desktop Permanent Sidebar */}
+        <div className="hidden md:flex w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col shrink-0">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search Vault Wiki..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-xs focus:outline-none focus:border-indigo-500 text-slate-800 dark:text-slate-200"
+              />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
+            {categories.map((cat) => {
+              const catArticles = filteredArticles.filter(a => a.category === cat.id);
+              if (catArticles.length === 0) return null;
+
+              return (
+                <div key={cat.id} className="space-y-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2.5 block mb-1">
+                    {cat.label}
+                  </span>
+                  {catArticles.map((article) => {
+                    const Icon = article.icon;
+                    const isActive = activeArticleId === article.id;
+                    return (
+                      <button
+                        key={article.id}
+                        onClick={() => setActiveArticleId(article.id)}
+                        className={`w-full flex items-center justify-between text-left px-2.5 py-1.5 rounded text-xs transition-all cursor-pointer ${
+                          isActive 
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-l-2 border-indigo-600 dark:border-indigo-400' 
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
+                          <span className="truncate">{article.title}</span>
+                        </div>
+                        <ChevronRight className={`h-3 w-3 shrink-0 opacity-0 transition-opacity ${isActive ? 'opacity-100 text-indigo-500' : ''}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-4">
-          {categories.map((cat) => {
-            const catArticles = filteredArticles.filter(a => a.category === cat.id);
-            if (catArticles.length === 0) return null;
-
-            return (
-              <div key={cat.id} className="space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2.5 block mb-1">
-                  {cat.label}
-                </span>
-                {catArticles.map((article) => {
-                  const Icon = article.icon;
-                  const isActive = activeArticleId === article.id;
-                  return (
-                    <button
-                      key={article.id}
-                      onClick={() => setActiveArticleId(article.id)}
-                      className={`w-full flex items-center justify-between text-left px-2.5 py-1.5 rounded text-xs transition-all ${
-                        isActive 
-                          ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-bold border-l-2 border-indigo-600 dark:border-indigo-400' 
-                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 truncate">
-                        <Icon className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-indigo-500' : 'text-slate-400'}`} />
-                        <span className="truncate">{article.title}</span>
-                      </div>
-                      <ChevronRight className={`h-3 w-3 shrink-0 opacity-0 transition-opacity ${isActive ? 'opacity-100 text-indigo-500' : ''}`} />
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Wiki Content Canvas */}
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-950">
-        <div className="max-w-3xl mx-auto px-6 py-8 md:px-10 md:py-12">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeArticle.id}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.15 }}
-            >
-              {activeArticle.renderContent()}
-            </motion.div>
-          </AnimatePresence>
+        {/* Main Wiki Content Canvas */}
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-950 custom-scrollbar">
+          <div className="max-w-3xl mx-auto px-4 py-6 md:px-10 md:py-12">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeArticle.id}
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.15 }}
+              >
+                {activeArticle.renderContent()}
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </motion.div>

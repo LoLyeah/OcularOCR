@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe } from 'lucide-react';
 import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings } from '@/lib/storage';
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
@@ -8,6 +8,7 @@ import { performOCR } from '@/lib/ocr';
 import { extractTextFromImages } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
+import { useToast } from './toast';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -19,6 +20,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [search, setSearch] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
   
   const [selectedDocs, setSelectedDocs] = useState<Set<string>>(new Set());
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
@@ -82,6 +84,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     if (!fileList || fileList.length === 0) return;
 
     setIsUploading(true);
+    let successCount = 0;
     try {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
@@ -112,10 +115,22 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           encryptedData: encrypted,
         };
         await saveDocument(doc);
+        successCount++;
       }
       await loadDocs();
+      if (successCount > 0) {
+        toast({
+          title: successCount === 1 ? "File encrypted & stored" : `${successCount} files encrypted & stored`,
+          variant: "success"
+        });
+      }
     } catch (err) {
       console.error('Upload failed', err);
+      toast({
+        title: "Upload failed",
+        description: "Failed to encrypt and save the documents locally.",
+        variant: "error"
+      });
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -213,11 +228,16 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       setDownloadUrl('');
       setShowUrlInput(false);
       await loadDocs();
+      toast({
+        title: "File downloaded & encrypted",
+        variant: "success"
+      });
     } catch (err: any) {
       console.error('Import from URL failed', err);
-      setCustomAlert({
-        title: "Import Failed",
-        message: err.message || "Failed to import file from URL. Ensure it is a direct download link and supported format."
+      toast({
+        title: "Import failed",
+        description: err.message || "Failed to download and encrypt file.",
+        variant: "error"
       });
     } finally {
       setIsDownloading(false);
@@ -238,10 +258,15 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       newSelected.delete(deleteConfirmId);
       setSelectedDocs(newSelected);
       await loadDocs();
+      toast({
+        title: "Document deleted",
+        variant: "success"
+      });
     } catch (err: any) {
-      setCustomAlert({
-        title: "Delete Failed",
-        message: err.message || "An error occurred while deleting the file."
+      toast({
+        title: "Delete failed",
+        description: err.message || "An error occurred while deleting the file.",
+        variant: "error"
       });
     } finally {
       setDeleteConfirmId(null);
@@ -249,18 +274,24 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   };
 
   const executeBulkDelete = async () => {
+    const totalCount = selectedDocs.size;
     setIsProcessingBulk(true);
-    setBulkProgress(`Deleting ${selectedDocs.size} documents...`);
+    setBulkProgress(`Deleting ${totalCount} documents...`);
     try {
       for (const id of Array.from(selectedDocs)) {
         await deleteDocument(id);
       }
       setSelectedDocs(new Set());
       await loadDocs();
+      toast({
+        title: `${totalCount} documents deleted`,
+        variant: "success"
+      });
     } catch (err: any) {
-      setCustomAlert({
-        title: "Bulk Delete Failed",
-        message: err.message || "An error occurred while deleting."
+      toast({
+        title: "Bulk delete failed",
+        description: err.message || "An error occurred while deleting.",
+        variant: "error"
       });
     } finally {
       setIsProcessingBulk(false);
@@ -294,7 +325,8 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       return;
     }
     
-    const newTags = [...new Set([...(doc.decryptedTags || []), newTagValue.trim()])];
+    const tagToAdd = newTagValue.trim();
+    const newTags = [...new Set([...(doc.decryptedTags || []), tagToAdd])];
     const { encrypted, iv } = await encryptString(JSON.stringify(newTags), cryptoKey);
     
     const { decryptedTags, ...docToSave } = doc;
@@ -305,7 +337,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     });
     setTaggingDocId(null);
     setNewTagValue('');
-    loadDocs();
+    await loadDocs();
+    toast({
+      title: `Tag "${tagToAdd}" added`,
+      variant: "success"
+    });
   };
   
   const handleRemoveTag = async (e: React.MouseEvent, doc: DocumentEntry & { decryptedTags: string[] }, tagToRemove: string) => {
@@ -320,7 +356,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       encryptedTags: encrypted,
       tagsIv: iv
     });
-    loadDocs();
+    await loadDocs();
+    toast({
+      title: "Tag removed",
+      variant: "success"
+    });
   };
 
   const handleStartTagging = async (e: React.MouseEvent, doc: DocumentEntry & { decryptedTags: string[] }) => {
@@ -357,7 +397,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       tagsIv: iv
     });
     setTaggingDocId(null);
-    loadDocs();
+    await loadDocs();
+    toast({
+      title: `Tag "${tag}" added`,
+      variant: "success"
+    });
   };
 
   const handleBulkAutoTag = async () => {
@@ -398,7 +442,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           const { decryptedTags, ...docToSave } = doc;
           await saveDocument({
             ...docToSave,
-            encryptedTags,
+            encryptedTags: encryptedTags,
             tagsIv
           });
         } catch (e) {
@@ -407,10 +451,15 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       }
 
       await loadDocs();
+      toast({
+        title: `Auto-tagged ${docsWithOcr.length} documents`,
+        variant: "success"
+      });
     } catch (err: any) {
-      setCustomAlert({
-        title: "Auto-Tagging Failed",
-        message: err.message || "An unexpected error occurred during bulk auto-tagging."
+      toast({
+        title: "Auto-tagging failed",
+        description: err.message || "An unexpected error occurred during bulk auto-tagging.",
+        variant: "error"
       });
     } finally {
       setIsProcessingBulk(false);
@@ -459,10 +508,15 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       }
       
       pdf.save(`vault-bulk-export-${Date.now()}.pdf`);
+      toast({
+        title: "PDF exported successfully",
+        variant: "success"
+      });
     } catch (err: any) {
-      setCustomAlert({
-        title: "Export Failed",
-        message: err.message || "An unexpected error occurred during PDF generation."
+      toast({
+        title: "Export failed",
+        description: err.message || "An unexpected error occurred during PDF generation.",
+        variant: "error"
       });
     } finally {
       setIsProcessingBulk(false);
@@ -475,6 +529,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     if (docsToProcess.length === 0) return;
     
     setIsProcessingBulk(true);
+    let successCount = 0;
     
     try {
       const encryptedSettings = await getSettings();
@@ -558,16 +613,22 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             encryptedTags,
             tagsIv
           });
+          successCount++;
         } catch (e) {
           console.error(`OCR failed for ${doc.name}`, e);
         }
       }
       
       await loadDocs();
+      toast({
+        title: `OCR completed for ${successCount} documents`,
+        variant: "success"
+      });
     } catch (err: any) {
-      setCustomAlert({
-        title: "Bulk OCR Failed",
-        message: err.message || "An unexpected error occurred during bulk processing."
+      toast({
+        title: "Bulk OCR failed",
+        description: err.message || "An unexpected error occurred during bulk processing.",
+        variant: "error"
       });
     } finally {
       setIsProcessingBulk(false);
@@ -592,53 +653,69 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       onDrop={handleDrop}
       className="flex-1 overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative"
     >
-      {isDragging && (
-        <div className="absolute inset-0 z-50 bg-indigo-50/95 dark:bg-slate-900/98 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center transition-all duration-200">
-          <div className="border-2 border-dashed border-indigo-500 dark:border-indigo-400 w-full h-full rounded-xl flex flex-col items-center justify-center p-8 pointer-events-none">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
-              <UploadCloud className="h-8 w-8 animate-bounce" />
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 bg-indigo-50/95 dark:bg-slate-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center"
+          >
+            <div className="border-2 border-dashed border-indigo-500 dark:border-indigo-400 w-full h-full rounded-xl flex flex-col items-center justify-center p-8 pointer-events-none">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                <UploadCloud className="h-8 w-8 animate-bounce" />
+              </div>
+              <p className="text-base font-bold text-indigo-900 dark:text-indigo-200">
+                Drop files here to encrypt & store securely
+              </p>
+              <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
+                Supported formats: PDF, PNG, JPEG, WebP
+              </p>
+              <div className="mt-4 flex items-center gap-1.5 text-[10.5px] bg-indigo-100/50 dark:bg-indigo-950/30 px-3 py-1 rounded text-indigo-700 dark:text-indigo-300 font-mono">
+                <span>All operations are 100% client-side & private</span>
+              </div>
             </div>
-            <p className="text-base font-bold text-indigo-900 dark:text-indigo-200">
-              Drop files here to encrypt & store securely
-            </p>
-            <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
-              Supported formats: PDF, PNG, JPEG, WebP
-            </p>
-            <div className="mt-4 flex items-center gap-1.5 text-[10.5px] bg-indigo-100/50 dark:bg-indigo-950/30 px-3 py-1 rounded text-indigo-700 dark:text-indigo-300 font-mono">
-              <span>All operations are 100% client-side & private</span>
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="p-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+      <div className="p-3 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 gap-2.5">
         <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Your Secure Documents</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <input 
             type="text" 
             placeholder="Search in vault..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white px-3 py-1 rounded w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white px-3 py-1.5 rounded flex-1 md:w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
           <button
             onClick={() => setShowUrlInput(!showUrlInput)}
-            className={`px-3 py-1 text-xs font-bold rounded shadow-sm flex items-center gap-2 border transition-colors cursor-pointer ${
+            className={`px-3 py-1.5 text-xs font-bold rounded shadow-sm flex items-center gap-2 border transition-colors cursor-pointer ${
               showUrlInput 
                 ? 'bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-slate-300 dark:border-slate-700' 
                 : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700'
             }`}
           >
             <Link className="h-3 w-3" />
-            ADD FROM URL
+            Add From URL
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
           >
-            <UploadCloud className="h-3 w-3" />
-            {isUploading ? 'ENCRYPTING...' : 'IMPORT FILE'}
+            {isUploading ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Encrypting...
+              </>
+            ) : (
+              <>
+                <UploadCloud className="h-3 w-3" />
+                Import File
+              </>
+            )}
           </button>
           <input 
             type="file" 
@@ -651,48 +728,64 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
         </div>
       </div>
 
-      {showUrlInput && (
-        <div className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3">
-          <form onSubmit={handleImportFromUrl} className="flex gap-2 max-w-2xl mx-auto">
-            <div className="relative flex-1">
-              <Globe className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-              <input
-                type="url"
-                required
-                placeholder="Enter direct file link (e.g., https://example.com/file.pdf)"
-                value={downloadUrl}
-                onChange={e => setDownloadUrl(e.target.value)}
-                className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
+      <AnimatePresence>
+        {showUrlInput && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 overflow-hidden"
+          >
+            <div className="p-3">
+              <form onSubmit={handleImportFromUrl} className="flex flex-col sm:flex-row gap-2 max-w-2xl mx-auto">
+                <div className="relative flex-1">
+                  <Globe className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                  <input
+                    type="url"
+                    required
+                    placeholder="Enter direct file link (e.g., https://example.com/file.pdf)"
+                    value={downloadUrl}
+                    onChange={e => setDownloadUrl(e.target.value)}
+                    className="w-full text-xs pl-8 pr-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isDownloading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                >
+                  {isDownloading ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    'Download & Encrypt'
+                  )}
+                </button>
+              </form>
             </div>
-            <button
-              type="submit"
-              disabled={isDownloading}
-              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded shadow-sm disabled:opacity-50 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  IMPORTING...
-                </>
-              ) : (
-                'DOWNLOAD & ENCRYPT'
-              )}
-            </button>
-          </form>
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto">
-        {isProcessingBulk && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
-            <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-6 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800">
-              <Loader2 className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
-              <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Processing Documents</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{bulkProgress}</p>
-            </div>
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
+
+      <div className="flex-1 overflow-y-auto custom-scrollbar relative">
+        <AnimatePresence>
+          {isProcessingBulk && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm"
+            >
+              <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-6 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800">
+                <Loader2 className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Processing Documents</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{bulkProgress}</p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         
         {docs.length === 0 ? (
           <div className="mt-16 px-4 flex flex-col items-center justify-center">
@@ -701,7 +794,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
               className="max-w-lg mx-auto w-full border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 group"
             >
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950 text-slate-400 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                <UploadCloud className="h-7 w-7 animate-pulse" />
+                <UploadCloud className="h-7 w-7 animate-float" />
               </div>
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                 Drag & drop files here, or click to browse
@@ -716,31 +809,40 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           </div>
         ) : (
           <div className="flex flex-col h-full">
-            {selectedDocs.size > 0 && (
-              <div className="sticky top-0 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-100 dark:border-indigo-800/50 px-4 py-2 flex items-center justify-between z-20">
-                <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{selectedDocs.size} selected</span>
-                <div className="flex gap-2">
-                  <button onClick={handleBulkOcr} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm">
-                    <ScanText className="h-3.5 w-3.5" /> BULK OCR
-                  </button>
-                  <button onClick={handleBulkAutoTag} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm animate-pulse">
-                    <Tag className="h-3.5 w-3.5" /> AUTO-TAG
-                  </button>
-                  <button onClick={handleBulkExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm">
-                    <Download className="h-3.5 w-3.5" /> EXPORT PDF
-                  </button>
-                  <button onClick={() => setShowBulkDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors shadow-sm">
-                    <Trash2 className="h-3.5 w-3.5" /> BULK DELETE
-                  </button>
-                </div>
-              </div>
-            )}
+            <AnimatePresence>
+              {selectedDocs.size > 0 && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="sticky top-0 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-100 dark:border-indigo-800/50 z-20 overflow-hidden"
+                >
+                  <div className="px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{selectedDocs.size} selected</span>
+                    <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
+                      <button onClick={handleBulkOcr} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
+                        <ScanText className="h-3.5 w-3.5" /> Bulk OCR
+                      </button>
+                      <button onClick={handleBulkAutoTag} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
+                        <Tag className="h-3.5 w-3.5" /> Auto-Tag
+                      </button>
+                      <button onClick={handleBulkExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
+                        <Download className="h-3.5 w-3.5" /> Export PDF
+                      </button>
+                      <button onClick={() => setShowBulkDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors shadow-sm cursor-pointer">
+                        <Trash2 className="h-3.5 w-3.5" /> Bulk Delete
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             
             <table className="w-full text-left border-collapse">
-              <thead className={`sticky ${selectedDocs.size > 0 ? 'top-10' : 'top-0'} bg-white dark:bg-slate-900 shadow-sm z-10 transition-all`}>
+              <thead className="sticky top-0 bg-white dark:bg-slate-900 shadow-sm z-10">
                 <tr className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase border-b border-slate-200 dark:border-slate-800">
                   <th className="px-4 py-2 w-10">
-                    <button onClick={handleToggleSelectAll} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300">
+                    <button onClick={handleToggleSelectAll} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 cursor-pointer">
                       {selectedDocs.size === filteredDocs.length && filteredDocs.length > 0 ? (
                         <CheckSquare className="h-4 w-4" />
                       ) : (
@@ -751,106 +853,121 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <th className="px-4 py-2">File Name</th>
                   <th className="px-4 py-2">Tags</th>
                   <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Date Imported</th>
+                  <th className="px-4 py-2 hidden md:table-cell">Type</th>
+                  <th className="px-4 py-2 hidden md:table-cell">Date Imported</th>
                   <th className="px-4 py-2 w-10"></th>
                 </tr>
               </thead>
               <tbody className="text-xs">
-                {filteredDocs.map((doc) => (
-                  <tr 
-                    key={doc.id}
-                    onClick={() => onOpenDoc(doc)}
-                    className={`border-b border-slate-50 dark:border-slate-800/50 cursor-pointer bg-white dark:bg-slate-900 transition-colors ${selectedDocs.has(doc.id) ? 'bg-indigo-50/30 dark:bg-indigo-900/20 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
-                  >
-                    <td className="px-4 py-3" onClick={(e) => handleToggleSelect(e, doc.id)}>
-                      {selectedDocs.has(doc.id) ? (
-                        <CheckSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                      ) : (
-                        <Square className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className={doc.type.includes('pdf') ? 'text-red-500 dark:text-red-400' : 'text-blue-500 dark:text-blue-400'}>
-                          <File className="h-4 w-4" />
-                        </span> 
-                        {doc.name}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {doc.decryptedTags?.map(t => (
-                          <span key={t} className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}>
-                            {t}
-                            <button onClick={(e) => handleRemoveTag(e, doc, t)} className="hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                              &times;
-                            </button>
-                          </span>
-                        ))}
-                        {taggingDocId === doc.id ? (
-                          <div className="flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 shadow-md z-30 min-w-[150px] absolute animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
-                            <form onSubmit={(e) => submitTag(e, doc)} className="flex items-center gap-1">
-                              <input 
-                                autoFocus
-                                value={newTagValue}
-                                onChange={e => setNewTagValue(e.target.value)}
-                                placeholder="Press Enter to add..."
-                                className="px-1.5 py-0.5 rounded text-[10px] text-slate-700 dark:text-slate-200 border border-indigo-300 dark:border-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full bg-white dark:bg-slate-900"
-                                onBlur={() => setTimeout(() => setTaggingDocId(null), 200)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') setTaggingDocId(null);
-                                }}
-                              />
-                            </form>
-                            {activeSuggestions.length > 0 && (
-                              <div className="flex flex-col gap-1 mt-1 border-t border-slate-200 dark:border-slate-700 pt-1.5">
-                                <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-left">Suggested:</span>
-                                <div className="flex flex-wrap gap-1">
-                                  {activeSuggestions.map(t => (
-                                    <button
-                                      key={t}
-                                      onClick={(e) => handleAddSuggestedTag(e, doc, t)}
-                                      className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[9px] text-indigo-600 dark:text-indigo-400 font-medium transition-colors cursor-pointer text-left"
-                                    >
-                                      + {t}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                <AnimatePresence initial={false}>
+                  {filteredDocs.map((doc) => (
+                    <motion.tr 
+                      layout
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      key={doc.id}
+                      onClick={() => onOpenDoc(doc)}
+                      className={`border-b border-slate-50 dark:border-slate-800/50 cursor-pointer bg-white dark:bg-slate-900 transition-colors ${selectedDocs.has(doc.id) ? 'bg-indigo-50/30 dark:bg-indigo-900/20 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
+                    >
+                      <td className="px-4 py-3" onClick={(e) => handleToggleSelect(e, doc.id)}>
+                        {selectedDocs.has(doc.id) ? (
+                          <CheckSquare className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                         ) : (
-                          <button onClick={(e) => handleStartTagging(e, doc)} className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 border border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500">
-                            + tag
-                          </button>
+                          <Square className="h-4 w-4 text-slate-300 dark:text-slate-600" />
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        doc.encryptedSummary ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 
-                        doc.encryptedOcrText ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                      }`}>
-                        {doc.encryptedSummary ? 'SUMMARIZED' : doc.encryptedOcrText ? 'INDEXED' : 'STORED'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold tracking-wider">
-                      {doc.type.split('/')[1] || 'FILE'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-400 dark:text-slate-500">
-                      {new Date(doc.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={(e) => handleDeleteClick(e, doc.id)}
-                        className="p-1.5 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 rounded"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className={doc.type.includes('pdf') ? 'text-red-500 dark:text-red-400' : 'text-blue-500 dark:text-blue-400'}>
+                            <File className="h-4 w-4" />
+                          </span> 
+                          {doc.name}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-1">
+                          <AnimatePresence initial={false}>
+                            {doc.decryptedTags?.map(t => (
+                              <motion.span 
+                                initial={{ scale: 0.8, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.8, opacity: 0 }}
+                                key={t} 
+                                className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold flex items-center gap-1 group ${getTagColors(t)}`}
+                              >
+                                {t}
+                                <button onClick={(e) => handleRemoveTag(e, doc, t)} className="hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                  &times;
+                                </button>
+                              </motion.span>
+                            ))}
+                          </AnimatePresence>
+                          {taggingDocId === doc.id ? (
+                            <div className="flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700 shadow-md z-30 min-w-[150px] absolute animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+                              <form onSubmit={(e) => submitTag(e, doc)} className="flex items-center gap-1">
+                                <input 
+                                  autoFocus
+                                  value={newTagValue}
+                                  onChange={e => setNewTagValue(e.target.value)}
+                                  placeholder="Press Enter to add..."
+                                  className="px-1.5 py-0.5 rounded text-[10px] text-slate-700 dark:text-slate-200 border border-indigo-300 dark:border-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full bg-white dark:bg-slate-900"
+                                  onBlur={() => setTimeout(() => setTaggingDocId(null), 200)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') setTaggingDocId(null);
+                                  }}
+                                />
+                              </form>
+                              {activeSuggestions.length > 0 && (
+                                <div className="flex flex-col gap-1 mt-1 border-t border-slate-200 dark:border-slate-700 pt-1.5">
+                                  <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider text-left">Suggested:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {activeSuggestions.map(t => (
+                                      <button
+                                        key={t}
+                                        onClick={(e) => handleAddSuggestedTag(e, doc, t)}
+                                        className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-indigo-100 dark:border-indigo-900 text-[9px] text-indigo-600 dark:text-indigo-400 font-medium transition-colors cursor-pointer text-left"
+                                      >
+                                        + {t}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <button onClick={(e) => handleStartTagging(e, doc)} className="px-1.5 py-0.5 rounded text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 border border-dashed border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-500 cursor-pointer">
+                              + tag
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          doc.encryptedSummary ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 
+                          doc.encryptedOcrText ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {doc.encryptedSummary ? 'SUMMARIZED' : doc.encryptedOcrText ? 'INDEXED' : 'STORED'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold tracking-wider hidden md:table-cell">
+                        {doc.type.split('/')[1] || 'FILE'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-400 dark:text-slate-500 hidden md:table-cell">
+                        {new Date(doc.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={(e) => handleDeleteClick(e, doc.id)}
+                          className="p-1.5 text-slate-400 dark:text-slate-500 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-500 dark:hover:text-red-400 rounded cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </AnimatePresence>
               </tbody>
             </table>
           </div>
@@ -858,93 +975,129 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       </div>
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 animate-pulse">
-                <AlertTriangle className="h-5 w-5" />
+      <AnimatePresence>
+        {deleteConfirmId && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Document Permanently?</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Are you sure you want to delete <span className="font-semibold text-slate-700 dark:text-slate-300">&ldquo;{docs.find(d => d.id === deleteConfirmId)?.name}&rdquo;</span>? This action is irreversible and the encrypted data will be destroyed.
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Document Permanently?</h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Are you sure you want to delete <span className="font-semibold text-slate-700 dark:text-slate-300">&ldquo;{docs.find(d => d.id === deleteConfirmId)?.name}&rdquo;</span>? This action is irreversible and the encrypted data will be destroyed.
-                </p>
+              <div className="mt-6 flex justify-end gap-2 text-xs">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeDelete}
+                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer"
+                >
+                  Delete File
+                </button>
               </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2 text-xs">
-              <button
-                onClick={() => setDeleteConfirmId(null)}
-                className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors"
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={executeDelete}
-                className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm"
-              >
-                DELETE FILE
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bulk Delete Confirmation Modal */}
-      {showBulkDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 animate-pulse">
-                <AlertTriangle className="h-5 w-5" />
+      <AnimatePresence>
+        {showBulkDeleteConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-md rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-xl"
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Multiple Documents?</h3>
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    Are you sure you want to delete <span className="font-bold text-slate-700 dark:text-slate-300">{selectedDocs.size} documents</span> permanently? This will destroy all encrypted data and summaries for the selected files.
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Multiple Documents?</h3>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                  Are you sure you want to delete <span className="font-bold text-slate-700 dark:text-slate-300">{selectedDocs.size} documents</span> permanently? This will destroy all encrypted data and summaries for the selected files.
-                </p>
+              <div className="mt-6 flex justify-end gap-2 text-xs">
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(false)}
+                  className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeBulkDelete}
+                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer"
+                >
+                  Delete All
+                </button>
               </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2 text-xs">
-              <button
-                onClick={() => setShowBulkDeleteConfirm(false)}
-                className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors"
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={executeBulkDelete}
-                className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm"
-              >
-                DELETE ALL
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Custom Alert Modal */}
-      {customAlert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xl">
-            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              <h3 className="text-sm font-bold">{customAlert.title}</h3>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-              {customAlert.message}
-            </p>
-            <div className="flex justify-end text-xs">
-              <button
-                onClick={() => setCustomAlert(null)}
-                className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-colors shadow-sm"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {customAlert && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="w-full max-w-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xl"
+            >
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                <h3 className="text-sm font-bold">{customAlert.title}</h3>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+                {customAlert.message}
+              </p>
+              <div className="flex justify-end text-xs">
+                <button
+                  onClick={() => setCustomAlert(null)}
+                  className="px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-colors shadow-sm cursor-pointer"
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

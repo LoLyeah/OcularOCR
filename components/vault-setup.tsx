@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { deriveKey, encryptString, decryptString } from '@/lib/crypto';
 import { getSalt, clearVault, getVerificationToken, setVerificationToken } from '@/lib/storage';
-import { Lock, Unlock, AlertTriangle, ShieldCheck, ShieldOff } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Lock, Unlock, AlertTriangle, ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface VaultSetupProps {
   onUnlock: (key: CryptoKey) => void;
@@ -115,119 +115,144 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm"
+        exit={{ opacity: 0, y: -20, scale: 0.96 }}
+        transition={{ duration: 0.2 }}
+        className="w-full max-w-md rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm overflow-hidden"
       >
-        {!showResetWarning ? (
-          <>
-            {setupStep === 'choose_mode' ? (
-              <div className="flex flex-col items-center text-center">
-                <div className="mb-4">
-                  <Image src="/icon.svg" width={64} height={64} className="rounded-2xl shadow-md select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
-                </div>
-                <h1 className="text-xl font-bold">Welcome to OcularOCR</h1>
-                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
-                  Choose how you want to secure your local document vault. This determines how your data will be encrypted on this device.
-                </p>
-                <div className="flex w-full flex-col gap-3">
-                  <button
-                    onClick={() => setSetupStep('set_password')}
-                    className="flex flex-col items-start rounded border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 p-4 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lock className="h-4 w-4 text-indigo-700 dark:text-indigo-400" />
-                      <span className="font-bold text-sm text-indigo-900 dark:text-indigo-300">Encrypted Vault (Recommended)</span>
-                    </div>
-                    <span className="text-xs text-indigo-700 dark:text-indigo-400/80 leading-relaxed">Secure all documents and AI settings with a password. Requires password on every visit.</span>
-                  </button>
-                  
-                  <button
-                    onClick={handleSetupUnencrypted}
-                    disabled={isLoading}
-                    className="flex flex-col items-start rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left disabled:opacity-50"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Unlock className="h-4 w-4 text-slate-700 dark:text-slate-300" />
-                      <span className="font-bold text-sm text-slate-900 dark:text-slate-200">Open Vault</span>
-                    </div>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Data is still stored locally, but automatically unlocked without a password.</span>
-                  </button>
-                </div>
-                {error && <p className="mt-4 text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
+        <AnimatePresence mode="wait">
+          {showResetWarning ? (
+            <motion.div
+              key="reset-warning"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className="mb-4 rounded bg-red-50 dark:bg-red-900/20 p-3 text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-8 w-8" />
               </div>
-            ) : (
-              <>
-                <div className="mb-6 flex flex-col items-center text-center">
-                  <div className="mb-4">
-                    <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
+              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reset Vault & Wipe Data</h2>
+              <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
+                Are you sure? This will permanently delete all your encrypted documents, settings, and the encryption key. This action cannot be undone.
+              </p>
+              <div className="mt-6 flex w-full flex-col gap-2">
+                <button
+                  onClick={handleResetVault}
+                  className="w-full rounded bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 shadow-sm transition-colors cursor-pointer"
+                >
+                  YES, WIPE ALL DATA
+                </button>
+                <button
+                  onClick={() => setShowResetWarning(false)}
+                  className="w-full rounded bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                >
+                  CANCEL
+                </button>
+              </div>
+            </motion.div>
+          ) : setupStep === 'choose_mode' ? (
+            <motion.div
+              key="choose-mode"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className="mb-4">
+                <Image src="/icon.svg" width={64} height={64} className="rounded-2xl shadow-md select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
+              </div>
+              <h1 className="text-xl font-bold">Welcome to OcularOCR</h1>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6">
+                Choose how you want to secure your local document vault. This determines how your data will be encrypted on this device.
+              </p>
+              <div className="flex w-full flex-col gap-3">
+                <button
+                  onClick={() => setSetupStep('set_password')}
+                  className="flex flex-col items-start rounded border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 p-4 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-left cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Lock className="h-4 w-4 text-indigo-700 dark:text-indigo-400" />
+                    <span className="font-bold text-sm text-indigo-900 dark:text-indigo-300">Encrypted Vault (Recommended)</span>
                   </div>
-                  <h1 className="text-lg font-bold">Secure Local Vault</h1>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Enter your vault password. If this is your first time, this password will be used to encrypt all your data locally.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-                  <div>
-                    <input
-                      type="password"
-                      placeholder="Vault Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                      autoFocus
-                    />
-                  </div>
-                  {error && <p className="text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 shadow-sm"
-                  >
-                    {isLoading ? 'Unlocking...' : (
-                      <>
-                        <Unlock className="h-4 w-4" />
-                        UNLOCK VAULT
-                      </>
-                    )}
-                  </button>
-                </form>
+                  <span className="text-xs text-indigo-700 dark:text-indigo-400/80 leading-relaxed">Secure all documents and AI settings with a password. Requires password on every visit.</span>
+                </button>
                 
-                <div className="mt-6 flex justify-center">
-                  <button 
-                    onClick={() => setShowResetWarning(true)}
-                    className="text-xs font-medium text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                  >
-                    Forgot Password? Reset Vault
-                  </button>
+                <button
+                  onClick={handleSetupUnencrypted}
+                  disabled={isLoading}
+                  className="flex flex-col items-start rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left disabled:opacity-50 cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Unlock className="h-4 w-4 text-slate-700 dark:text-slate-300" />
+                    <span className="font-bold text-sm text-slate-900 dark:text-slate-200">Open Vault</span>
+                  </div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Data is still stored locally, but automatically unlocked without a password.</span>
+                </button>
+              </div>
+              {error && <p className="mt-4 text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="set-password"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.15 }}
+            >
+              <div className="mb-6 flex flex-col items-center text-center">
+                <div className="mb-4">
+                  <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
                 </div>
-              </>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col items-center text-center">
-            <div className="mb-4 rounded bg-red-50 dark:bg-red-900/20 p-3 text-red-600 dark:text-red-400">
-              <AlertTriangle className="h-8 w-8" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reset Vault & Wipe Data</h2>
-            <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-              Are you sure? This will permanently delete all your encrypted documents, settings, and the encryption key. This action cannot be undone.
-            </p>
-            <div className="mt-6 flex w-full flex-col gap-2">
-              <button
-                onClick={handleResetVault}
-                className="w-full rounded bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700 shadow-sm transition-colors"
-              >
-                YES, WIPE ALL DATA
-              </button>
-              <button
-                onClick={() => setShowResetWarning(false)}
-                className="w-full rounded bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-              >
-                CANCEL
-              </button>
-            </div>
-          </div>
-        )}
+                <h1 className="text-lg font-bold">Secure Local Vault</h1>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Enter your vault password. If this is your first time, this password will be used to encrypt all your data locally.
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+                <div>
+                  <input
+                    type="password"
+                    placeholder="Vault Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    autoFocus
+                  />
+                </div>
+                {error && <p className="text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="mt-2 flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 shadow-sm cursor-pointer"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Unlocking...
+                    </>
+                  ) : (
+                    <>
+                      <Unlock className="h-4 w-4" />
+                      UNLOCK VAULT
+                    </>
+                  )}
+                </button>
+              </form>
+              
+              <div className="mt-6 flex justify-center">
+                <button 
+                  onClick={() => setShowResetWarning(true)}
+                  className="text-xs font-medium text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                >
+                  Forgot Password? Reset Vault
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </div>
   );

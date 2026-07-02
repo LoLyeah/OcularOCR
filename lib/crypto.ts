@@ -72,10 +72,19 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
 export async function isWebAuthnPrfSupported(): Promise<boolean> {
   if (typeof window === 'undefined' || !window.PublicKeyCredential) return false;
   try {
-    const caps = await PublicKeyCredential.getClientCapabilities?.();
-    return !!caps?.prf;
+    const getCaps = PublicKeyCredential.getClientCapabilities;
+    if (typeof getCaps === 'function') {
+      const caps = await getCaps();
+      if (caps) {
+        if ('prf' in caps) return !!(caps as any).prf;
+        if (caps.extensions && Array.isArray(caps.extensions)) {
+          return caps.extensions.includes('prf');
+        }
+      }
+    }
+    return true;
   } catch (e) {
-    return false;
+    return true;
   }
 }
 

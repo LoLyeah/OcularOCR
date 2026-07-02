@@ -60,7 +60,16 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     temperature: 0.2,
     customOcrPrompt: '',
     customSummaryPrompt: '',
-    autoTagStrategy: 'hybrid'
+    autoTagStrategy: 'hybrid',
+    ocrLanguages: ['eng'],
+    enablePreprocessing: true,
+    preprocessingGrayscale: true,
+    preprocessingContrast: true,
+    preprocessingDenoise: true,
+    preprocessingDeskew: true,
+    preprocessingRotate: true,
+    preprocessingBinarize: false,
+    rotationThreshold: 3.0
   });
   
   // Keep track of provider-specific inputs so they don't bleed into each other
@@ -124,13 +133,22 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             }
           }
           
-          setSettings(prev => ({
+           setSettings(prev => ({
             ...prev,
             ...parsed,
             temperature: parsed.temperature ?? 0.2,
             autoTagStrategy: parsed.autoTagStrategy ?? 'hybrid',
             customOcrPrompt: parsed.customOcrPrompt ?? '',
             customSummaryPrompt: parsed.customSummaryPrompt ?? '',
+            ocrLanguages: parsed.ocrLanguages ?? ['eng'],
+            enablePreprocessing: parsed.enablePreprocessing ?? true,
+            preprocessingGrayscale: parsed.preprocessingGrayscale ?? true,
+            preprocessingContrast: parsed.preprocessingContrast ?? true,
+            preprocessingDenoise: parsed.preprocessingDenoise ?? true,
+            preprocessingDeskew: parsed.preprocessingDeskew ?? true,
+            preprocessingRotate: parsed.preprocessingRotate ?? true,
+            preprocessingBinarize: parsed.preprocessingBinarize ?? false,
+            rotationThreshold: parsed.rotationThreshold ?? 3.0,
           }));
           
           if (parsed.configs) {
@@ -607,6 +625,120 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             {t('autoTagHelp')}
                           </p>
                         </div>
+
+                        {/* Image Preprocessing Section */}
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="enablePreprocessing" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest cursor-pointer select-none">
+                              {t('enablePreprocessingLabel')}
+                              <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('enablePreprocessingSub')}</span>
+                            </label>
+                            <input
+                              type="checkbox"
+                              id="enablePreprocessing"
+                              checked={settings.enablePreprocessing ?? true}
+                              onChange={(e) => setSettings({ ...settings, enablePreprocessing: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                            />
+                          </div>
+
+                          {(settings.enablePreprocessing ?? true) && (
+                            <div className="grid grid-cols-2 gap-2 pl-3 border-l-2 border-slate-200 dark:border-slate-800 py-1 transition-all">
+                              {[
+                                { key: 'preprocessingGrayscale', label: t('grayscaleToggle') },
+                                { key: 'preprocessingContrast', label: t('contrastToggle') },
+                                { key: 'preprocessingDenoise', label: t('denoiseToggle') },
+                                { key: 'preprocessingDeskew', label: t('deskewToggle') },
+                                { key: 'preprocessingRotate', label: t('rotateToggle') },
+                                { key: 'preprocessingBinarize', label: t('binarizeToggle') }
+                              ].map((step) => (
+                                <div key={step.key} className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    id={step.key}
+                                    checked={(settings as any)[step.key] ?? false}
+                                    onChange={(e) => setSettings({ ...settings, [step.key]: e.target.checked })}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 dark:border-slate-700 text-indigo-500 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                                  />
+                                  <label htmlFor={step.key} className="text-[11px] text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                                    {step.label}
+                                  </label>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {(settings.enablePreprocessing ?? true) && settings.preprocessingRotate && (
+                            <div className="pl-3 border-l-2 border-slate-200 dark:border-slate-800 flex flex-col gap-1.5">
+                              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                <span>{t('rotationThresholdLabel')}</span>
+                                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{settings.rotationThreshold ?? 3.0}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1.0"
+                                max="10.0"
+                                step="0.5"
+                                value={settings.rotationThreshold ?? 3.0}
+                                onChange={(e) => setSettings({ ...settings, rotationThreshold: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* OCR Languages Section */}
+                        {!settings.useLlmForOcr && (
+                          <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-2">
+                            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+                              {t('ocrLanguagesLabel')}
+                              <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('ocrLanguagesSub')}</span>
+                            </label>
+                            
+                            <div className="flex flex-wrap gap-1.5 mt-1">
+                              {[
+                                { code: 'eng', label: 'English', bundled: true },
+                                { code: 'ind', label: 'Indonesian', bundled: true },
+                                { code: 'spa', label: 'Spanish', bundled: false },
+                                { code: 'fra', label: 'French', bundled: false },
+                                { code: 'deu', label: 'German', bundled: false },
+                                { code: 'chi_sim', label: 'Chinese (Simp)', bundled: false },
+                                { code: 'jpn', label: 'Japanese', bundled: false },
+                                { code: 'ara', label: 'Arabic', bundled: false },
+                                { code: 'hin', label: 'Hindi', bundled: false },
+                              ].map((lang) => {
+                                const isSelected = (settings.ocrLanguages || ['eng']).includes(lang.code);
+                                return (
+                                  <button
+                                    key={lang.code}
+                                    type="button"
+                                    onClick={() => {
+                                      const current = settings.ocrLanguages || ['eng'];
+                                      let next;
+                                      if (isSelected) {
+                                        if (current.length <= 1) return;
+                                        next = current.filter(c => c !== lang.code);
+                                      } else {
+                                        next = [...current, lang.code];
+                                      }
+                                      setSettings({ ...settings, ocrLanguages: next });
+                                    }}
+                                    className={`px-2.5 py-1.5 rounded text-[10px] font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                                      isSelected 
+                                        ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300' 
+                                        : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                    }`}
+                                  >
+                                    {lang.label}
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      lang.bundled ? 'bg-green-500' : 'bg-blue-400'
+                                    }`} title={lang.bundled ? 'Offline' : 'Requires Download'} />
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="mt-1">
                           <button

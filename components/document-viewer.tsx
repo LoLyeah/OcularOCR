@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
-import { DocumentEntry, getSettings, saveDocument, AISettings } from '@/lib/storage';
+import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR } from '@/lib/ocr';
 import { renderPdfToCanvas } from '@/lib/pdf';
@@ -12,6 +12,8 @@ import { getTagColors } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
+import { exportSearchablePDF } from '@/lib/pdf-export';
+import { preprocessImage } from '@/lib/preprocessing';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -47,6 +49,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const { t, language } = useI18n();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string>('');
+  const [structuredOcr, setStructuredOcr] = useState<StructuredOcrResult | null>(null);
   const [summary, setSummary] = useState<string>('');
   
   const [tags, setTags] = useState<string[]>([]);
@@ -55,6 +58,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [tagInput, setTagInput] = useState('');
   
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [ocrProgressText, setOcrProgressText] = useState('');
   const [useLlmForOcr, setUseLlmForOcr] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   
@@ -101,7 +105,19 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
 
         if (doc.encryptedOcrText && doc.ocrTextIv) {
           const text = await decryptString(doc.encryptedOcrText, doc.ocrTextIv, cryptoKey);
-          setOcrText(text);
+          try {
+            const parsed = JSON.parse(text);
+            if (parsed && typeof parsed === 'object' && 'text' in parsed) {
+              setOcrText(parsed.text);
+              setStructuredOcr(parsed);
+            } else {
+              setOcrText(text);
+              setStructuredOcr(null);
+            }
+          } catch (e) {
+            setOcrText(text);
+            setStructuredOcr(null);
+          }
         }
         
         if (doc.encryptedSummary && doc.summaryIv) {
@@ -140,8 +156,31 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     };
   }, [doc, cryptoKey]);
 
+  const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
+    if (doc.type.includes('pdf')) {
+      const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
+      if (canvases && canvases.length > 0) {
+        return Array.from(canvases) as HTMLCanvasElement[];
+      }
+      const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
+      return await renderPdfToCanvas(decryptedBuffer);
+    } else {
+      if (!fileUrl) return [];
+      const img = new Image();
+      img.src = fileUrl;
+      await new Promise((resolve) => { img.onload = resolve; });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.drawImage(img, 0, 0);
+      return [canvas];
+    }
+  };
+
   const handleRunOcr = async () => {
     setIsProcessingOcr(true);
+    setOcrProgressText(language === 'id' ? 'Menyiapkan berkas...' : 'Preparing document...');
     setActiveTab('ocr');
     setError(null);
     try {
@@ -155,55 +194,73 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       setUseLlmForOcr(!!settings?.useLlmForOcr);
 
       let extractedText = '';
+      let finalOcrResult: StructuredOcrResult;
+
+      const prepOpts = {
+        enabled: settings?.enablePreprocessing ?? true,
+        grayscale: settings?.preprocessingGrayscale ?? true,
+        contrast: settings?.preprocessingContrast ?? true,
+        binarize: settings?.preprocessingBinarize ?? false,
+        denoise: settings?.preprocessingDenoise ?? true,
+        deskew: settings?.preprocessingDeskew ?? true,
+        rotate: settings?.preprocessingRotate ?? true,
+        rotationThreshold: settings?.rotationThreshold ?? 3.0
+      };
+
+      const canvases = await getPageCanvases();
+      if (canvases.length === 0) {
+        throw new Error(language === 'id' ? "Tidak ada gambar halaman yang ditemukan." : "No page images found.");
+      }
       
       if (settings?.useLlmForOcr) {
+        setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
         const imagesBase64: string[] = [];
-        if (doc.type.includes('pdf')) {
-          const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
-          if (canvases) {
-            for (const canvas of canvases) {
-              imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
-            }
-          }
-        } else if (fileUrl) {
-          const img = new Image();
-          img.src = fileUrl;
-          await new Promise((resolve) => { img.onload = resolve; });
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0);
-            imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
-          }
-        }
         
-        if (imagesBase64.length === 0) {
-           throw new Error("No images found to extract text from.");
+        // Preprocess pages for AI Vision OCR as well
+        const processedCanvases = await Promise.all(
+          canvases.map(async c => {
+            const res = await preprocessImage(c, prepOpts);
+            return res.canvas;
+          })
+        );
+
+        for (const canvas of processedCanvases) {
+          imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
         }
         
         extractedText = await extractTextFromImages(imagesBase64, settings);
+        finalOcrResult = {
+          text: extractedText,
+          pages: parseOcrPages(extractedText).map(p => ({
+            pageNumber: p.pageNumber,
+            text: p.text,
+            words: []
+          }))
+        };
       } else {
-        if (doc.type.includes('pdf')) {
-          const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
-          if (canvases) {
-            let pageIdx = 1;
-            for (const canvas of canvases) {
-              const text = await performOCR(canvas);
-              extractedText += `--- PAGE ${pageIdx} ---\n${text}\n\n`;
-              pageIdx++;
-            }
+        const languages = settings?.ocrLanguages?.join('+') || 'eng';
+        const total = canvases.length;
+        
+        const ocrResult = await performOCR(
+          canvases,
+          languages,
+          prepOpts,
+          (pageIndex, progress) => {
+            const pageNum = pageIndex + 1;
+            const percent = Math.round(progress * 100);
+            setOcrProgressText(
+              language === 'id' 
+                ? `Memproses Halaman ${pageNum}/${total} (${percent}%)` 
+                : `Processing Page ${pageNum}/${total} (${percent}%)`
+            );
           }
-        } else if (fileUrl) {
-          const img = new Image();
-          img.src = fileUrl;
-          await new Promise((resolve) => { img.onload = resolve; });
-          extractedText = await performOCR(img);
-        }
+        );
+        finalOcrResult = ocrResult;
+        extractedText = ocrResult.text;
       }
       
       setOcrText(extractedText);
+      setStructuredOcr(finalOcrResult);
       
       let encryptedTags = doc.encryptedTags;
       let tagsIv = doc.tagsIv;
@@ -221,7 +278,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       }
 
       // Save OCR to DB
-      const { encrypted, iv } = await encryptString(extractedText, cryptoKey);
+      const { encrypted, iv } = await encryptString(JSON.stringify(finalOcrResult), cryptoKey);
       const { decryptedTags, ...docToSave } = doc as any;
       await saveDocument({
         ...docToSave,
@@ -239,6 +296,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       console.error('OCR failed', err);
     } finally {
       setIsProcessingOcr(false);
+      setOcrProgressText('');
     }
   };
 
@@ -356,65 +414,102 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     }
   };
 
-  const exportFile = async (type: 'txt' | 'md' | 'pdf') => {
+  const handleExportPdf = async (mode: 'searchable' | 'text-only') => {
+    if (!ocrText) return;
+
+    try {
+      if (mode === 'searchable') {
+        if (!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length) {
+          toast({
+            title: language === 'id' ? "PDF Dapat Dicari tidak tersedia" : "Searchable PDF not available",
+            description: language === 'id' ? "Dukungan kata presisi tidak ditemukan. Harap gunakan ekspor Teks saja." : "Precise word metadata not found. Please use Text-only export.",
+            variant: "error"
+          });
+          return;
+        }
+
+        toast({
+          title: language === 'id' ? "Mengekspor PDF Dapat Dicari..." : "Exporting Searchable PDF...",
+          variant: "info"
+        });
+
+        const canvases = await getPageCanvases();
+        await exportSearchablePDF({
+          fileName: `${doc.name}-searchable.pdf`,
+          pageCanvases: canvases,
+          structuredOcr
+        });
+      } else {
+        const { jsPDF } = await import('jspdf');
+        const pdf = new jsPDF();
+        const parsedPages = parseOcrPages(ocrText);
+        
+        parsedPages.forEach((p, index) => {
+          if (index > 0) {
+            pdf.addPage();
+          }
+          
+          pdf.setFont('courier', 'bold');
+          pdf.setFontSize(10);
+          pdf.setTextColor(100, 116, 139);
+          pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber}`, 15, 12);
+          pdf.setDrawColor(226, 232, 240);
+          pdf.line(15, 15, 195, 15);
+          
+          pdf.setFont('courier', 'normal');
+          pdf.setFontSize(9);
+          pdf.setTextColor(30, 41, 59);
+          
+          const lines = pdf.splitTextToSize(p.text, 180);
+          let y = 22;
+          for (let i = 0; i < lines.length; i++) {
+            if (y > 280) {
+              pdf.addPage();
+              pdf.setFont('courier', 'bold');
+              pdf.setFontSize(10);
+              pdf.setTextColor(100, 116, 139);
+              pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber} (CONTINUED)`, 15, 12);
+              pdf.setDrawColor(226, 232, 240);
+              pdf.line(15, 15, 195, 15);
+              
+              pdf.setFont('courier', 'normal');
+              pdf.setFontSize(9);
+              pdf.setTextColor(30, 41, 59);
+              y = 22;
+            }
+            pdf.text(lines[i], 15, y);
+            y += 5.5;
+          }
+        });
+        pdf.save(`${doc.name}-extracted.pdf`);
+      }
+      
+      toast({
+        title: language === 'id' ? "PDF berhasil diekspor" : "PDF exported successfully",
+        variant: "success"
+      });
+    } catch (err: any) {
+      console.error('Failed to export PDF', err);
+      toast({
+        title: language === 'id' ? "Ekspor gagal" : "Export failed",
+        description: err.message || "Failed to generate PDF.",
+        variant: "error"
+      });
+    }
+  };
+
+  const exportFile = async (type: 'txt' | 'md') => {
     if (!ocrText) return;
     
-    if (type === 'pdf') {
-      const { jsPDF } = await import('jspdf');
-      const pdf = new jsPDF();
-      const parsedPages = parseOcrPages(ocrText);
-      
-      parsedPages.forEach((p, index) => {
-        if (index > 0) {
-          pdf.addPage();
-        }
-        
-        // Header
-        pdf.setFont('courier', 'bold');
-        pdf.setFontSize(10);
-        pdf.setTextColor(100, 116, 139); // slate-500 style
-        pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber}`, 15, 12);
-        pdf.setDrawColor(226, 232, 240); // slate-200 style
-        pdf.line(15, 15, 195, 15);
-        
-        // Text styling
-        pdf.setFont('courier', 'normal');
-        pdf.setFontSize(9);
-        pdf.setTextColor(30, 41, 59); // slate-800
-        
-        const lines = pdf.splitTextToSize(p.text, 180);
-        let y = 22;
-        for (let i = 0; i < lines.length; i++) {
-          if (y > 280) {
-            pdf.addPage();
-            // Header for overflow page
-            pdf.setFont('courier', 'bold');
-            pdf.setFontSize(10);
-            pdf.setTextColor(100, 116, 139);
-            pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber} (CONTINUED)`, 15, 12);
-            pdf.setDrawColor(226, 232, 240);
-            pdf.line(15, 15, 195, 15);
-            
-            pdf.setFont('courier', 'normal');
-            pdf.setFontSize(9);
-            pdf.setTextColor(30, 41, 59);
-            y = 22;
-          }
-          pdf.text(lines[i], 15, y);
-          y += 5.5;
-        }
-      });
-      pdf.save(`${doc.name}-extracted.pdf`);
-    } else {
-      const mime = type === 'md' ? 'text/markdown' : 'text/plain';
-      const blob = new Blob([ocrText], { type: mime });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${doc.name}-extracted.${type}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+    const mime = type === 'md' ? 'text/markdown' : 'text/plain';
+    const blob = new Blob([ocrText], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.name}-extracted.${type}`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
     toast({
       title: language === 'id' ? `${type.toUpperCase()} berhasil diekspor` : `${type.toUpperCase()} exported successfully`,
       variant: "success"
@@ -535,11 +630,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                 >
                   {isProcessingOcr ? (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
-                      <Loader2 className="mb-3 h-6 w-6 animate-spin" />
-                      <p>
-                        {useLlmForOcr
+                      <Loader2 className="mb-3 h-6 w-6 animate-spin animate-duration-1000 text-indigo-500" />
+                      <p className="text-center max-w-xs leading-relaxed">
+                        {ocrProgressText || (useLlmForOcr
                           ? (language === 'id' ? 'Menjalankan OCR bertenaga AI...' : 'Running AI-powered optical character recognition...')
-                          : (language === 'id' ? 'Menjalankan OCR lokal...' : 'Running local optical character recognition...')}
+                          : (language === 'id' ? 'Menjalankan OCR lokal...' : 'Running local optical character recognition...'))}
                       </p>
                     </div>
                   ) : ocrText ? (
@@ -573,18 +668,38 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                           </button>
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[10px] font-mono text-slate-400 mr-2">{language === 'id' ? 'Format ekspor:' : 'Export format:'}</span>
-                          {(['txt', 'md', 'pdf'] as const).map(type => (
-                            <button
-                              key={type}
-                              onClick={() => exportFile(type)}
-                              className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <Download className="h-3 w-3" />
-                              {type.toUpperCase()}
-                            </button>
-                          ))}
+                          <button
+                            onClick={() => exportFile('txt')}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            TXT
+                          </button>
+                          <button
+                            onClick={() => exportFile('md')}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            MD
+                          </button>
+                          <button
+                            onClick={() => handleExportPdf('searchable')}
+                            disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length}
+                            className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-50/10 border border-indigo-200 dark:border-indigo-800/40 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                            title={(!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length) ? (language === 'id' ? 'PDF Dapat Dicari memerlukan OCR Tesseract' : 'Searchable PDF requires Tesseract OCR') : ''}
+                          >
+                            <Download className="h-3 w-3" />
+                            {language === 'id' ? 'PDF Dapat Dicari' : 'Searchable PDF'}
+                          </button>
+                          <button
+                            onClick={() => handleExportPdf('text-only')}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            {language === 'id' ? 'PDF Teks Saja' : 'Text-only PDF'}
+                          </button>
                         </div>
                       </div>
 

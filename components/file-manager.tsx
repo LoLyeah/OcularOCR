@@ -10,6 +10,8 @@ import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
+import { parseOcrPages } from './document-viewer';
+import { preprocessImage } from '@/lib/preprocessing';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -560,59 +562,70 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
 
         try {
           const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
-          let ocrText = '';
+          let finalOcrText = '';
+          let ocrResultToSave = '';
 
-          if (settings?.useLlmForOcr) {
-            if (doc.type.includes('pdf')) {
-              const canvases = await renderPdfToCanvas(decryptedBuffer);
-              const imagesBase64 = canvases.map(c => c.toDataURL('image/jpeg', 0.8));
-              ocrText = await extractTextFromImages(imagesBase64, settings);
-            } else {
-              const blob = new Blob([decryptedBuffer], { type: doc.type });
-              const url = URL.createObjectURL(blob);
-              const img = document.createElement('img');
-              img.src = url;
-              await new Promise(resolve => img.onload = resolve);
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              canvas.getContext('2d')?.drawImage(img, 0, 0);
-              URL.revokeObjectURL(url);
-              const base64 = canvas.toDataURL('image/jpeg', 0.8);
-              ocrText = await extractTextFromImages([base64], settings);
-            }
+          const prepOpts = {
+            enabled: settings?.enablePreprocessing ?? true,
+            grayscale: settings?.preprocessingGrayscale ?? true,
+            contrast: settings?.preprocessingContrast ?? true,
+            binarize: settings?.preprocessingBinarize ?? false,
+            denoise: settings?.preprocessingDenoise ?? true,
+            deskew: settings?.preprocessingDeskew ?? true,
+            rotate: settings?.preprocessingRotate ?? true,
+            rotationThreshold: settings?.rotationThreshold ?? 3.0
+          };
+
+          let canvases: HTMLCanvasElement[] = [];
+          if (doc.type.includes('pdf')) {
+            canvases = await renderPdfToCanvas(decryptedBuffer);
           } else {
-            if (doc.type.includes('pdf')) {
-              const canvases = await renderPdfToCanvas(decryptedBuffer);
-              let pageIdx = 1;
-              for (const canvas of canvases) {
-                const text = await performOCR(canvas);
-                ocrText += `--- PAGE ${pageIdx} ---\n${text}\n\n`;
-                pageIdx++;
-              }
-            } else {
-              const blob = new Blob([decryptedBuffer], { type: doc.type });
-              const url = URL.createObjectURL(blob);
-              const img = document.createElement('img');
-              img.src = url;
-              await new Promise(resolve => img.onload = resolve);
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              canvas.getContext('2d')?.drawImage(img, 0, 0);
-              URL.revokeObjectURL(url);
-              ocrText = await performOCR(canvas);
-            }
+            const blob = new Blob([decryptedBuffer], { type: doc.type });
+            const url = URL.createObjectURL(blob);
+            const img = document.createElement('img');
+            img.src = url;
+            await new Promise(resolve => img.onload = resolve);
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext('2d')?.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+            canvases = [canvas];
           }
 
-          const { encrypted, iv } = await encryptString(ocrText, cryptoKey);
+          if (settings?.useLlmForOcr) {
+            const processedCanvases = await Promise.all(
+              canvases.map(async c => {
+                const res = await preprocessImage(c, prepOpts);
+                return res.canvas;
+              })
+            );
+            const imagesBase64 = processedCanvases.map(c => c.toDataURL('image/jpeg', 0.8));
+            finalOcrText = await extractTextFromImages(imagesBase64, settings);
+            const parsedResult = {
+              text: finalOcrText,
+              pages: parseOcrPages(finalOcrText).map(p => ({
+                pageNumber: p.pageNumber,
+                text: p.text,
+                words: []
+              }))
+            };
+            ocrResultToSave = JSON.stringify(parsedResult);
+          } else {
+            const languages = settings?.ocrLanguages?.join('+') || 'eng';
+            const ocrResult = await performOCR(canvases, languages, prepOpts);
+            finalOcrText = ocrResult.text;
+            ocrResultToSave = JSON.stringify(ocrResult);
+          }
+
+          const { encrypted, iv } = await encryptString(ocrResultToSave, cryptoKey);
           
           let encryptedTags = doc.encryptedTags;
           let tagsIv = doc.tagsIv;
           
           try {
             if (settings?.autoTagStrategy !== 'none') {
-              const suggested = await suggestTags(ocrText, doc.name, settings);
+              const suggested = await suggestTags(finalOcrText, doc.name, settings);
               const mergedTags = Array.from(new Set([...(doc.decryptedTags || []), ...suggested]));
               const tagEncryption = await encryptString(JSON.stringify(mergedTags), cryptoKey);
               encryptedTags = tagEncryption.encrypted;

@@ -33,6 +33,33 @@ export interface AISettings {
   customSummaryPrompt?: string;
   autoTagStrategy?: 'hybrid' | 'local' | 'none';
   configs?: Record<string, { apiKey: string; endpoint: string; model: string }>;
+  
+  // Preprocessing and OCR extensions
+  ocrLanguages?: string[]; // e.g., ['eng', 'ind']
+  enablePreprocessing?: boolean;
+  preprocessingGrayscale?: boolean;
+  preprocessingContrast?: boolean;
+  preprocessingDenoise?: boolean;
+  preprocessingDeskew?: boolean;
+  preprocessingRotate?: boolean;
+  preprocessingBinarize?: boolean;
+  rotationThreshold?: number;
+}
+
+export interface OcrWord {
+  text: string;
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+}
+
+export interface OcrPageData {
+  pageNumber: number;
+  text: string;
+  words: OcrWord[];
+}
+
+export interface StructuredOcrResult {
+  text: string;
+  pages: OcrPageData[];
 }
 
 export async function getSalt(): Promise<Uint8Array> {

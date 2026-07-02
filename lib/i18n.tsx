@@ -129,6 +129,19 @@ export const translationDict: Translations = {
     en: 'Customize summaries. Placeholders: {{text}}, {{tags}}.', 
     id: 'Kustomisasi ringkasan. Placeholders: {{text}}, {{tags}}.' 
   },
+  enablePreprocessingLabel: { en: 'Enable Image Preprocessing', id: 'Aktifkan Pra-pemrosesan Gambar' },
+  enablePreprocessingSub: { en: 'Auto-detect and improve image quality before running OCR', id: 'Deteksi otomatis dan tingkatkan kualitas gambar sebelum OCR' },
+  grayscaleToggle: { en: 'Grayscale Conversion', id: 'Konversi Skala Abu-abu' },
+  contrastToggle: { en: 'Contrast Enhancement', id: 'Peningkatan Kontras' },
+  denoiseToggle: { en: 'Noise Reduction (Median Filter)', id: 'Pengurangan Derau (Filter Median)' },
+  deskewToggle: { en: 'Auto Deskew (Straighten)', id: 'Auto Deskew (Luruskan)' },
+  rotateToggle: { en: 'Auto Rotate Pages', id: 'Auto Rotasi Halaman' },
+  binarizeToggle: { en: 'Binarization (Otsu Threshold)', id: 'Binarisasi (Otsu Threshold)' },
+  rotationThresholdLabel: { en: 'Rotation Confidence Threshold', id: 'Ambang Batas Kepercayaan Rotasi' },
+  ocrLanguagesLabel: { en: 'OCR Languages', id: 'Bahasa OCR' },
+  ocrLanguagesSub: { en: 'Select languages to recognize. Bundled languages run offline.', id: 'Pilih bahasa untuk dikenali. Bahasa bawaan berjalan offline.' },
+  exportSearchablePdf: { en: 'Searchable PDF (Sandwich)', id: 'PDF Dapat Dicari (Sandwich)' },
+  exportTextPdf: { en: 'Text-only PDF', id: 'PDF Teks Saja' },
 
   // Settings - Appearance Tab
   colorThemeLabel: { en: 'Color Theme', id: 'Tema Warna' },

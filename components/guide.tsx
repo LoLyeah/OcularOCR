@@ -48,124 +48,232 @@ function ModelRegistry() {
 
   const models = [
     {
-      name: 'GPT-5.2',
-      description: 'OpenAI’s premier proprietary vision-language foundation model. S-tier precision, state-of-the-art visual grounding, and high-fidelity structured JSON layouts.',
+      name: 'GPT-5.6',
+      description: 'GPT-5.6 is OpenAI’s newest flagship multimodal model released on June 26, 2026, delivering unparalleled visual document parsing, spatial reasoning, and handwriting accuracy across multiple Sol/Terra tiers.',
       provider: 'OpenAI',
       logoType: 'openai',
-      badge: 'Frontier VLM',
-      context: '256K Tokens',
-      accuracy: 99.3,
-      accuracyStr: '99.3%',
-      optimizedFor: 'Audit Reports & Structured Tables',
+      badge: 'Flagship Preview',
+      context: '512K Tokens',
+      accuracy: 99.6,
+      accuracyStr: '99.6%',
+      optimizedFor: 'Handwritten Audits & Edge-case Forms',
       type: 'proprietary'
     },
     {
-      name: 'Claude 4.6',
-      description: 'Anthropic’s leading reasoning VLM. Exceptional layout reconstruction, extreme factual consistency, and visual action/computer-use capabilities.',
+      name: 'Claude Sonnet 5',
+      description: 'Claude Sonnet 5 is a mid-tier large language model from Anthropic, released as a major leap in reasoning, vision capabilities, and multi-modal speed.',
       provider: 'Anthropic',
       logoType: 'anthropic',
-      badge: 'Reasoning SOTA',
+      badge: 'Highly Recommended',
       context: '200K Tokens',
-      accuracy: 99.0,
-      accuracyStr: '99.0%',
-      optimizedFor: 'Complex Invoices & Handwritings',
+      accuracy: 98.4,
+      accuracyStr: '98.4%',
+      optimizedFor: 'Visual Layouts & Code',
       type: 'proprietary'
     },
     {
-      name: 'Gemini 3 Pro',
-      description: 'Google’s massive-context flagship model. Natively multimodal, permitting direct analysis of multi-thousand-page visual documents and full PDF archives.',
+      name: 'Claude Fable 5',
+      description: "Claude Fable 5 is Anthropic's first generally available Mythos-class large language model, featuring specialized storytelling, creative writing, and human-like voice orchestration.",
+      provider: 'Anthropic',
+      logoType: 'anthropic',
+      badge: 'Mythos Class',
+      context: '150K Tokens',
+      accuracy: 94.2,
+      accuracyStr: '94.2%',
+      optimizedFor: 'Narratives & Creative Docs',
+      type: 'proprietary'
+    },
+    {
+      name: 'Gemma 4 12B',
+      description: 'Gemma 4 12B is an open-weight multimodal model from Google, featuring advanced text and vision processing at a highly efficient footprint.',
       provider: 'Google',
       logoType: 'google',
-      badge: 'Infinite Context',
-      context: '2M Tokens',
-      accuracy: 98.9,
-      accuracyStr: '98.9%',
-      optimizedFor: 'Long-Form Books & PDF Libraries',
+      badge: 'Open Weight',
+      context: '8K Tokens',
+      accuracy: 91.8,
+      accuracyStr: '91.8%',
+      optimizedFor: 'Edge/Local OCR',
+      type: 'open-source'
+    },
+    {
+      name: 'Claude Opus 4.8',
+      description: "Claude Opus 4.8 is Anthropic's most capable generally available large language model, providing ultra-high-fidelity reasoning, complex coding, and stellar doc analysis.",
+      provider: 'Anthropic',
+      logoType: 'anthropic',
+      badge: 'Elite Tier',
+      context: '300K Tokens',
+      accuracy: 99.1,
+      accuracyStr: '99.1%',
+      optimizedFor: 'Frontier Complex Logic',
       type: 'proprietary'
     },
     {
       name: 'Gemini 3.5 Flash',
-      description: 'Google’s low-latency multimodal speedster. Engineered for rapid visual parsing, sub-second responses, and cost-effective bulk OCR workloads.',
+      description: 'Gemini 3.5 Flash is a multimodal language model developed by Google DeepMind and designed for speed, efficiency, and heavy-duty, low-latency OCR workloads.',
       provider: 'Google',
       logoType: 'google',
       badge: 'OCR Speedster',
-      context: '1M Tokens',
+      context: '1M+ Tokens',
       accuracy: 96.8,
       accuracyStr: '96.8%',
-      optimizedFor: 'High-Throughput Mobile Ingestions',
+      optimizedFor: 'Bulk Multi-page Ingestion',
       type: 'proprietary'
     },
     {
-      name: 'Qwen3.5-397B-A17B',
-      description: 'Alibaba’s state-of-the-art Mixture-of-Experts (MoE) VLM. High-resolution spatial-temporal visual token routing for dense visual document reasoning.',
+      name: 'GPT-5.5',
+      description: 'GPT-5.5 is a multimodal large language model released by OpenAI, setting new records on visual and verbal standardized intelligence benchmarks.',
+      provider: 'OpenAI',
+      logoType: 'openai',
+      badge: 'Frontier SOTA',
+      context: '256K Tokens',
+      accuracy: 99.3,
+      accuracyStr: '99.3%',
+      optimizedFor: 'Standardized Tests & Vision',
+      type: 'proprietary'
+    },
+    {
+      name: 'Qwen3.6 27B',
+      description: 'Qwen3.6-27B is a dense 27-billion-parameter multimodal language model developed by Alibaba, optimizing high-speed spatial-temporal vision and text reasoning.',
       provider: 'Qwen',
       logoType: 'qwen',
-      badge: 'MoE VLM',
-      context: '128K Tokens',
-      accuracy: 97.9,
-      accuracyStr: '97.9%',
-      optimizedFor: 'Multilingual Document Understanding',
+      badge: 'Dense Multimodal',
+      context: '32K Tokens',
+      accuracy: 95.1,
+      accuracyStr: '95.1%',
+      optimizedFor: 'Multilingual Document Extraction',
       type: 'open-source'
     },
     {
-      name: 'GOT-OCR 2.0',
-      description: 'A dedicated, highly optimized layout and math-aware OCR specialist. Unified pixel-to-text token model natively handling charts, formulas, and complex tables.',
-      provider: 'GOT-OCR',
-      logoType: 'default',
-      badge: 'Layout Specialist',
-      context: '16K Tokens',
+      name: 'Claude Opus 4.7',
+      description: 'Claude Opus 4.7 is a proprietary multimodal language model developed by Anthropic, offering supreme document layout reconstruction and context comprehension.',
+      provider: 'Anthropic',
+      logoType: 'anthropic',
+      badge: 'Layout Expert',
+      context: '200K Tokens',
       accuracy: 98.2,
       accuracyStr: '98.2%',
-      optimizedFor: 'Mathematical Formulas & Raw Charts',
-      type: 'open-source'
-    },
-    {
-      name: 'DeepSeek-OCR 2 (3B)',
-      description: 'DeepSeek’s lightweight yet powerful layout-aware document reader. Employs DeepEncoder V2 for native spatial text sequence comprehension.',
-      provider: 'DeepSeek',
-      logoType: 'deepseek',
-      badge: 'DeepEncoder V2',
-      context: '128K Tokens',
-      accuracy: 94.8,
-      accuracyStr: '94.8%',
-      optimizedFor: 'Dense Scanning & Cost-Saving local VLM',
-      type: 'open-source'
-    },
-    {
-      name: 'Surya v2',
-      description: 'A 650M parameter ultra-fast CPU-efficient multilingual document parser. Provides high-fidelity paragraph-level bounding box layouts.',
-      provider: 'Surya',
-      logoType: 'default',
-      badge: 'CPU Efficient',
-      context: '8K Tokens',
-      accuracy: 92.5,
-      accuracyStr: '92.5%',
-      optimizedFor: 'On-Device Text Line Layout Segmentation',
-      type: 'open-source'
-    },
-    {
-      name: 'Mistral OCR 4',
-      description: 'Mistral’s premier layout-to-markdown API pipeline. Directly transforms visual inputs into structured paragraph hierarchies and JSON structures.',
-      provider: 'Mistral',
-      logoType: 'mistral',
-      badge: 'Markdown Master',
-      context: '32K Tokens',
-      accuracy: 97.4,
-      accuracyStr: '97.4%',
-      optimizedFor: 'API Bounding Boxes & Markdown Layouts',
+      optimizedFor: 'Heavily Formatted Forms',
       type: 'proprietary'
     },
     {
-      name: 'PaddleOCR v4',
-      description: 'Baidu’s industrial-scale production OCR. Exceptional throughput, industrial reliability, and top-tier accuracy for CJK multilingual documents.',
-      provider: 'Baidu',
-      logoType: 'default',
-      badge: 'Industrial Standard',
-      context: '4K Tokens',
-      accuracy: 97.1,
-      accuracyStr: '97.1%',
-      optimizedFor: 'High-Volume Production CJK Streams',
+      name: 'Qwen3.6 35B A3B',
+      description: 'Qwen3.6-35B-A3B is a sparse Mixture-of-Experts (MoE) multimodal language model, utilizing active parameters dynamically for robust multi-modal perception.',
+      provider: 'Qwen',
+      logoType: 'qwen',
+      badge: 'MoE Architecture',
+      context: '64K Tokens',
+      accuracy: 94.8,
+      accuracyStr: '94.8%',
+      optimizedFor: 'Bilingual / Code Tasks',
       type: 'open-source'
+    },
+    {
+      name: 'Qwen3.6 Flash',
+      description: 'Qwen3.6-Flash is the production API variant of the Qwen3.6 model series, designed for ultra-fast, cost-effective visual extraction and lightweight document pipelines.',
+      provider: 'Qwen',
+      logoType: 'qwen',
+      badge: 'Fast API',
+      context: '16K Tokens',
+      accuracy: 92.5,
+      accuracyStr: '92.5%',
+      optimizedFor: 'High-Throughput Parsing',
+      type: 'open-source'
+    },
+    {
+      name: 'Gemma 4 26B A4B',
+      description: "Gemma 4 26B A4B is the Mixture-of-Experts variant in Google's Gemma 4 family, maintaining dynamic routing to deliver high intelligence with minimal compute.",
+      provider: 'Google',
+      logoType: 'google',
+      badge: 'Dynamic MoE',
+      context: '32K Tokens',
+      accuracy: 94.0,
+      accuracyStr: '94.0%',
+      optimizedFor: 'Cost-Effective Reasoner',
+      type: 'open-source'
+    },
+    {
+      name: 'Gemma 4 31B',
+      description: "Gemma 4 31B is the largest dense model in Google's Gemma 4 family, built from the ground up for massive reasoning, multilingual OCR, and advanced visual QA.",
+      provider: 'Google',
+      logoType: 'google',
+      badge: 'Dense Powerhouse',
+      context: '64K Tokens',
+      accuracy: 97.4,
+      accuracyStr: '97.4%',
+      optimizedFor: 'Dense Multi-page Documents',
+      type: 'open-source'
+    },
+    {
+      name: 'Qwen3.6 Plus',
+      description: "Qwen3.6 Plus is a flagship model in Alibaba's Qwen Plus series, designed for elite performance across complex visual comprehension and multi-lingual processing.",
+      provider: 'Qwen',
+      logoType: 'qwen',
+      badge: 'Flagship VLM',
+      context: '128K Tokens',
+      accuracy: 96.5,
+      accuracyStr: '96.5%',
+      optimizedFor: 'Bilingual Translation & Tables',
+      type: 'open-source'
+    },
+    {
+      name: 'GPT-5.4 Mini',
+      description: 'GPT-5.4 mini is a fast, cost-efficient model developed by OpenAI and released on a compact layout, optimized for high-volume text and vision inferences.',
+      provider: 'OpenAI',
+      logoType: 'openai',
+      badge: 'Cost-Effective',
+      context: '128K Tokens',
+      accuracy: 95.3,
+      accuracyStr: '95.3%',
+      optimizedFor: 'Sub-second API Calls',
+      type: 'proprietary'
+    },
+    {
+      name: 'GPT-5.4 Nano',
+      description: 'GPT-5.4 nano is a high-throughput, edge-capable model developed by OpenAI and released on tiny architectures for instant sub-10ms response times.',
+      provider: 'OpenAI',
+      logoType: 'openai',
+      badge: 'Edge OCR',
+      context: '64K Tokens',
+      accuracy: 91.2,
+      accuracyStr: '91.2%',
+      optimizedFor: 'Instant Mobile Snapshots',
+      type: 'proprietary'
+    },
+    {
+      name: 'GLM-OCR',
+      description: 'GLM-OCR is a multimodal OCR model for complex document understanding, built on advanced Chinese-English cross-modal networks with high-fidelity visual layout retention.',
+      provider: 'GLM',
+      logoType: 'glm',
+      badge: 'OCR Specialist',
+      context: '32K Tokens',
+      accuracy: 97.8,
+      accuracyStr: '97.8%',
+      optimizedFor: 'Bilingual Scans & Invoices',
+      type: 'open-source'
+    },
+    {
+      name: 'GPT-5.4',
+      description: 'GPT-5.4 is a proprietary multimodal large language model developed by OpenAI and released to drive enterprise-grade multi-turn conversational document understanding.',
+      provider: 'OpenAI',
+      logoType: 'openai',
+      badge: 'Enterprise Tier',
+      context: '128K Tokens',
+      accuracy: 98.5,
+      accuracyStr: '98.5%',
+      optimizedFor: 'Deep Multi-turn Audit',
+      type: 'proprietary'
+    },
+    {
+      name: 'Gemini 3.1 Flash-Lite',
+      description: 'Gemini 3.1 Flash-Lite is a natively multimodal reasoning model from Google, designed to handle thousands of pages of text or images in its context window with lightning-fast speeds.',
+      provider: 'Google',
+      logoType: 'google',
+      badge: 'Lite Context',
+      context: '1M Tokens',
+      accuracy: 94.7,
+      accuracyStr: '94.7%',
+      optimizedFor: 'Rapid Long-form Reviews',
+      type: 'proprietary'
     }
   ];
 
@@ -182,8 +290,8 @@ function ModelRegistry() {
     openai: 'border-emerald-200 dark:border-emerald-950/40 bg-emerald-50/5 dark:bg-emerald-950/5 hover:border-emerald-400 dark:hover:border-emerald-800/80',
     anthropic: 'border-amber-200 dark:border-amber-950/40 bg-amber-50/5 dark:bg-amber-950/5 hover:border-amber-400 dark:hover:border-amber-800/80',
     google: 'border-blue-200 dark:border-blue-950/40 bg-blue-50/5 dark:bg-blue-950/5 hover:border-blue-400 dark:hover:border-blue-800/80',
-    deepseek: 'border-cyan-200 dark:border-cyan-950/40 bg-cyan-50/5 dark:bg-cyan-950/5 hover:border-cyan-400 dark:hover:border-cyan-800/80',
-    mistral: 'border-orange-200 dark:border-orange-950/40 bg-orange-50/5 dark:bg-orange-950/5 hover:border-orange-400 dark:hover:border-orange-800/80',
+    qwen: 'border-violet-200 dark:border-violet-950/40 bg-violet-50/5 dark:bg-violet-950/5 hover:border-violet-400 dark:hover:border-violet-800/80',
+    glm: 'border-slate-300 dark:border-slate-800 bg-slate-50/5 dark:bg-slate-900/5 hover:border-slate-500 dark:hover:border-slate-700',
     default: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
   };
 
@@ -203,7 +311,7 @@ function ModelRegistry() {
         </div>
         <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 p-3 rounded-xl flex flex-col justify-center shadow-xs">
           <span className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Max Context</span>
-          <span className="text-base sm:text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">2M <span className="text-[10px] font-bold text-slate-400">Tkn</span></span>
+          <span className="text-base sm:text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">1M+ <span className="text-[10px] font-bold text-slate-400">Tkn</span></span>
         </div>
       </div>
 
@@ -250,7 +358,7 @@ function ModelRegistry() {
         </div>
       </div>
 
-      {/* Grid of 10 Models */}
+      {/* Grid of 19 Models */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredModels.map(m => {
           const isSelected = selectedModel === m.name;
@@ -308,6 +416,11 @@ function ModelRegistry() {
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                         </svg>
+                      </div>
+                    )}
+                    {m.logoType === 'glm' && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-950 dark:bg-black border border-slate-800 text-white font-extrabold text-[9px] shadow-xs tracking-tighter">
+                        GLM
                       </div>
                     )}
                     {m.logoType === 'default' && (

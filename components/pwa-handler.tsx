@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Smartphone, ArrowDownToLine, RefreshCw } from 'lucide-react';
 import { useVersionCheck } from '@/hooks/use-version-check';
+import { useI18n } from '@/lib/i18n';
 
 export function PwaHandler() {
+  const { t } = useI18n();
   const { currentVersion, latestVersion, updateAvailable, performUpdate } = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
   const [deferredPrompt, setDeferredPromptState] = useState<any>(null);
@@ -126,24 +128,24 @@ export function PwaHandler() {
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              Install OcularOCR
+              {t('installAppBannerTitle')}
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-              Install on your desktop or phone to run fully offline with secure local databases and instant launch speeds.
+              {t('installAppBannerDesc')}
             </p>
             <div className="mt-3 flex gap-2 text-[10px]">
               <button
                 onClick={handleInstallClick}
-                className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer border-transparent"
               >
                 <ArrowDownToLine className="h-3 w-3" />
-                INSTALL NOW
+                {t('installBtn').toUpperCase()}
               </button>
               <button
                 onClick={handleDismiss}
                 className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all cursor-pointer"
               >
-                LATER
+                {t('dismissBtn').toUpperCase()}
               </button>
             </div>
           </div>
@@ -170,24 +172,24 @@ export function PwaHandler() {
           </div>
           <div className="flex-1 min-w-0">
             <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-              Update Available (v{latestVersion})
+              {t('updateAvailableBadgeTitle', { version: latestVersion })}
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-              A new version of OcularOCR is ready to use. Your vault and settings will remain safe.
+              {t('updateAvailableBadgeHelp')}
             </p>
             <div className="mt-3 flex gap-2 text-[10px]">
               <button
                 onClick={performUpdate}
-                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer border-transparent"
               >
                 <ArrowDownToLine className="h-3 w-3" />
-                UPDATE NOW
+                {t('updateHardRefreshBtn').toUpperCase()}
               </button>
               <button
                 onClick={() => setDismissedUpdate(true)}
                 className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all cursor-pointer"
               >
-                LATER
+                {t('dismissBtn').toUpperCase()}
               </button>
             </div>
           </div>

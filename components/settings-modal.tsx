@@ -5,6 +5,7 @@ import { AISettings, getSettings, saveSettings, clearVault, exportVaultEncrypted
 import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPrf, wrapMasterKey, arrayBufferToBase64, deriveKeyFromPrf } from '@/lib/crypto';
 import { useToast } from './toast';
 import { useVersionCheck } from '@/hooks/use-version-check';
+import { useI18n, Language } from '@/lib/i18n';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
@@ -12,6 +13,9 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
+  const { language: activeLanguage, setLanguage: updateActiveLanguage, t } = useI18n();
+  const [langLocal, setLangLocal] = useState<Language>(activeLanguage);
+
   const {
     currentVersion,
     latestVersion,
@@ -23,25 +27,24 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
 
   const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'system-reset'>('ai');
 
-  
   const handleManualCheck = async () => {
     toast({
-      title: "Checking for updates",
-      description: "Fetching the latest version from server...",
+      title: t('updateCheckingToast'),
+      description: t('updateCheckingToastDesc'),
       variant: "info"
     });
     const result = await checkForUpdate();
     if (result) {
       if (result.available) {
         toast({
-          title: "Update available!",
-          description: `Version v${result.version} is now available (current: v${currentVersion}).`,
+          title: t('updateAvailableToast'),
+          description: t('updateAvailableToastDesc', { version: result.version, current: currentVersion }),
           variant: "success"
         });
       } else {
         toast({
-          title: "Up to date",
-          description: `You are running the latest version (v${currentVersion}).`,
+          title: t('updateUpToDateToast'),
+          description: t('updateUpToDateToastDesc', { current: currentVersion }),
           variant: "success"
         });
       }
@@ -217,15 +220,15 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       
       setHasPasskey(true);
       toast({
-        title: "Passkey Linked Successfully",
-        description: "You can now unlock your vault using biometrics (Touch ID / Face ID) or your master password.",
+        title: t('passkeyLinkedSuccess'),
+        description: t('passkeyLinkedDesc'),
         variant: "success"
       });
     } catch (err: any) {
       console.error(err);
       toast({
-        title: "Passkey Registration Failed",
-        description: err?.message || "Ensure your device supports biometrics and try again.",
+        title: t('passkeyRegFailed'),
+        description: err?.message || t('passkeyRegFailedDesc'),
         variant: "error"
       });
     } finally {
@@ -240,8 +243,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     localStorage.setItem('vault_mode', 'encrypted');
     setHasPasskey(false);
     toast({
-      title: "Passkey Unlinked",
-      description: "Biometric unlock disabled. You can still unlock using your master password.",
+      title: t('passkeyUnlinked'),
+      description: t('passkeyUnlinkedDesc'),
       variant: "info"
     });
   };
@@ -260,14 +263,14 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({
-        title: "Vault Backup Exported",
-        description: "Your local-encrypted backup file has been saved to your downloads.",
+        title: t('vaultBackupExported'),
+        description: t('vaultBackupExportedDesc'),
         variant: "success"
       });
     } catch (err: any) {
       console.error(err);
       toast({
-        title: "Export Failed",
+        title: t('exportFailed'),
         description: err?.message || "Failed to generate backup file.",
         variant: "error"
       });
@@ -289,8 +292,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       
       await importVaultEncrypted(text);
       toast({
-        title: "Vault Imported",
-        description: "Your encrypted backup was loaded. Reloading page to prompt for unlock password...",
+        title: t('vaultImportedTitle'),
+        description: t('vaultImportedDesc'),
         variant: "success"
       });
       setTimeout(() => {
@@ -299,7 +302,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     } catch (err: any) {
       console.error(err);
       toast({
-        title: "Import Failed",
+        title: t('importFailed'),
         description: err?.message || "Failed to import backup. Please ensure the file is a valid OcularOCR backup JSON.",
         variant: "error"
       });
@@ -336,17 +339,20 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
 
       // Save Font Size settings
       localStorage.setItem('vault_font_size', fontSize);
+
+      // Save Language settings
+      updateActiveLanguage(langLocal);
       
       toast({
-        title: "Settings saved",
+        title: t('settingsSavedToast'),
         variant: "success"
       });
       onClose();
     } catch (err) {
       console.error("Failed to save settings", err);
       toast({
-        title: "Save failed",
-        description: "Failed to encrypt and store the settings.",
+        title: t('saveFailedToast'),
+        description: t('failedSaveSettings'),
         variant: "error"
       });
     } finally {
@@ -361,13 +367,14 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       // Clear localStorage configurations
       localStorage.removeItem('vault_theme');
       localStorage.removeItem('vault_font_size');
+      localStorage.removeItem('vault_lang');
       
       // Clear database vault
       await clearVault();
       
       toast({
-        title: "Vault reset successfully",
-        description: "Redirecting to initial setup...",
+        title: t('resetSuccessTitle'),
+        description: t('resetSuccessDesc'),
         variant: "success"
       });
       
@@ -377,8 +384,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     } catch (err) {
       console.error("Failed to reset vault", err);
       toast({
-        title: "Reset failed",
-        description: "An error occurred while clearing the vault.",
+        title: t('resetFailedTitle'),
+        description: t('resetFailedDesc'),
         variant: "error"
       });
       setIsResetting(false);
@@ -404,7 +411,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       >
         {/* Sidebar */}
         <div className="w-full md:w-48 bg-slate-50 dark:bg-slate-800/50 p-3 md:p-4 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto custom-scrollbar">
-          <h2 className="hidden md:block mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2">Settings</h2>
+          <h2 className="hidden md:block mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2">{t('settingsTitle')}</h2>
           
           <button
             type="button"
@@ -416,7 +423,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             }`}
           >
             <BrainCircuit className="h-4 w-4 shrink-0" />
-            AI Processing
+            {t('aiSettingsTab')}
           </button>
           
           <button
@@ -429,7 +436,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             }`}
           >
             <Palette className="h-4 w-4 shrink-0" />
-            Appearance
+            {t('appearanceSettingsTab')}
           </button>
 
           <button
@@ -442,24 +449,14 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             }`}
           >
             <ShieldAlert className="h-4 w-4 shrink-0" />
-            System & Security
+            {t('systemSettingsTab')}
           </button>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 p-5 md:p-6 flex flex-col min-h-0 overflow-y-auto">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold">
-              {activeTab === 'ai' ? 'AI Processing Configuration' : 
-               activeTab === 'appearance' ? 'Appearance Settings' : 'System, Security & Backup'}
-            </h2>
-            <button onClick={handleCancel} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <form onSubmit={handleSave} className="flex flex-col gap-4 flex-1 min-h-0">
-            <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+          <form onSubmit={handleSave} className="flex-1 flex flex-col justify-between gap-5 min-h-0">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
               <AnimatePresence mode="wait">
                 {activeTab === 'ai' ? (
                   <motion.div
@@ -471,186 +468,187 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     className="flex flex-col gap-4"
                   >
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Provider</label>
+                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('aiProviderLabel')}</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {(['gemini', 'openai', 'ollama'] as const).map((prov) => (
+                        {(['gemini', 'openai', 'ollama'] as const).map((p) => (
                           <button
-                            key={prov}
+                            key={p}
                             type="button"
-                            onClick={() => {
-                              setSettings({ ...settings, provider: prov });
-                            }}
-                            className={`rounded border py-2 text-xs font-bold transition-all cursor-pointer ${
-                              settings.provider === prov 
+                            onClick={() => setSettings({ ...settings, provider: p })}
+                            className={`rounded border py-2.5 text-xs font-bold capitalize transition-all cursor-pointer ${
+                              settings.provider === p 
                                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                           >
-                            {prov === 'gemini' ? 'Gemini' : prov === 'openai' ? 'OpenAI Compatible' : 'Ollama'}
+                            {p === 'openai' ? 'OpenAI Compatible' : p === 'ollama' ? 'Ollama (Offline)' : 'Google Gemini'}
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Model Identifier</label>
-                      <input
-                        type="text"
-                        value={providerConfigs[settings.provider]?.model || ''}
-                        onChange={(e) => setProviderConfigs({
-                          ...providerConfigs,
-                          [settings.provider]: { ...providerConfigs[settings.provider], model: e.target.value }
-                        })}
-                        placeholder={
-                          settings.provider === 'gemini' ? 'gemini-3.5-flash' : 
-                          settings.provider === 'openai' ? 'gpt-4o' : 'llama3'
-                        }
-                        className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
-                      />
-                      {settings.provider === 'gemini' && (
-                        <p className="mt-1.5 text-[10px] text-slate-500">Recommended: <span className="font-bold text-slate-700 dark:text-slate-300">gemini-3.5-flash</span></p>
-                      )}
-                      {settings.provider === 'openai' && (
-                        <div className="mt-1.5 text-[10px] text-slate-500 space-y-1">
-                          <p>• <span className="font-bold">OpenAI:</span> A vision model like <span className="font-bold text-slate-700 dark:text-slate-300">gpt-4o</span> is required for OCR.</p>
-                          <p>• <span className="font-bold">Groq:</span> We highly recommend <span className="font-bold text-slate-700 dark:text-slate-300">meta-llama/llama-4-scout-17b-16e-instruct</span> (vision-enabled and extremely fast).</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {settings.provider !== 'ollama' && (
+                    <div className="grid grid-cols-1 gap-3 bg-slate-50 dark:bg-slate-850 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
                       <div>
-                        <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">API Key</label>
-                        <input
-                          type="password"
-                          value={providerConfigs[settings.provider]?.apiKey || ''}
-                          onChange={(e) => setProviderConfigs({
-                            ...providerConfigs,
-                            [settings.provider]: { ...providerConfigs[settings.provider], apiKey: e.target.value }
-                          })}
-                          placeholder={`Enter your ${settings.provider === 'openai' ? 'OpenAI or Groq' : 'Gemini'} API key`}
-                          className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
-                        />
-                      </div>
-                    )}
-
-                    {(settings.provider === 'openai' || settings.provider === 'ollama') && (
-                      <div>
-                        <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">API Endpoint URL</label>
+                        <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('modelNameLabel')}</label>
                         <input
                           type="text"
-                          value={providerConfigs[settings.provider]?.endpoint || ''}
+                          required
+                          value={providerConfigs[settings.provider]?.model || ''}
                           onChange={(e) => setProviderConfigs({
                             ...providerConfigs,
-                            [settings.provider]: { ...providerConfigs[settings.provider], endpoint: e.target.value }
+                            [settings.provider]: { ...providerConfigs[settings.provider], model: e.target.value }
                           })}
                           placeholder={
-                            settings.provider === 'ollama' ? 'http://localhost:11434/v1/chat/completions' : 
-                            'https://api.openai.com/v1/chat/completions'
+                            settings.provider === 'gemini' ? 'gemini-3.5-flash' : 
+                            settings.provider === 'openai' ? 'gpt-4o' : 'llama3'
                           }
                           className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                         />
-                        {settings.provider === 'openai' && (
-                          <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
-                            Leave blank for default OpenAI. For Groq, set to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[9px]">https://api.groq.com/openai/v1/chat/completions</code>
-                          </p>
+                        {settings.provider === 'gemini' && (
+                          <p className="mt-1.5 text-[10px] text-slate-500">{t('recommendedFlash')}</p>
                         )}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 py-1">
-                      <input
-                        type="checkbox"
-                        id="useLlmForOcr"
-                        checked={settings.useLlmForOcr || false}
-                        onChange={(e) => setSettings({ ...settings, useLlmForOcr: e.target.checked })}
-                        className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
-                      />
-                      <label htmlFor="useLlmForOcr" className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                        Use LLM Vision for OCR Data Extraction
-                        <span className="block text-[10px] text-slate-500 dark:text-slate-500 font-normal">Extract text more intelligently using the AI model (requires vision support).</span>
-                      </label>
-                    </div>
-
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 flex flex-col gap-3">
-                      <div>
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Model Temperature</label>
-                          <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                            {(settings.temperature ?? 0.2).toFixed(1)}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0.0"
-                          max="1.0"
-                          step="0.1"
-                          value={settings.temperature ?? 0.2}
-                          onChange={(e) => setSettings({ ...settings, temperature: parseFloat(e.target.value) })}
-                          className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                        />
-                        <div className="flex justify-between text-[8px] text-slate-400 dark:text-slate-500 mt-1">
-                          <span>Deterministic (0.0)</span>
-                          <span>Creative (1.0)</span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Auto-Tagging Strategy</label>
-                        <select
-                          value={settings.autoTagStrategy || 'hybrid'}
-                          onChange={(e) => setSettings({ ...settings, autoTagStrategy: e.target.value as any })}
-                          className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
-                        >
-                          <option value="hybrid">Hybrid (AI + Rule-based)</option>
-                          <option value="local">Rule-based (Offline only)</option>
-                          <option value="none">Disabled (No auto-suggest)</option>
-                        </select>
-                        <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
-                          Choose how tags are suggested/generated for imported documents.
-                        </p>
-                      </div>
-
-                      <div className="mt-1">
-                        <button
-                          type="button"
-                          onClick={() => setShowAdvancedAI(!showAdvancedAI)}
-                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer flex items-center gap-1 focus:outline-none"
-                        >
-                          {showAdvancedAI ? 'Hide Advanced Prompt Controls' : 'Show Advanced Prompt Controls (System instructions)'}
-                        </button>
-
-                        {showAdvancedAI && (
-                          <div className="mt-3 flex flex-col gap-3 pl-1 border-l-2 border-indigo-100 dark:border-indigo-900/60">
-                            <div>
-                              <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Custom OCR Prompt</label>
-                              <textarea
-                                value={settings.customOcrPrompt || ''}
-                                onChange={(e) => setSettings({ ...settings, customOcrPrompt: e.target.value })}
-                                placeholder="Leave empty for default instructions..."
-                                rows={2}
-                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
-                              />
-                              <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
-                                Instructions for AI vision models when extracting text from images.
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Custom Summary Prompt</label>
-                              <textarea
-                                value={settings.customSummaryPrompt || ''}
-                                onChange={(e) => setSettings({ ...settings, customSummaryPrompt: e.target.value })}
-                                placeholder="E.g. Summarize this in 3 bullet points: {{text}}"
-                                rows={2}
-                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
-                              />
-                              <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
-                                Customize summaries. Placeholders: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[8px] font-mono">{"{{text}}"}</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[8px] font-mono">{"{{tags}}"}</code>.
-                              </p>
-                            </div>
+                        {settings.provider === 'openai' && (
+                          <div className="mt-1.5 text-[10px] text-slate-500 space-y-1">
+                            <p>• <span className="font-bold">OpenAI:</span> A vision model like <span className="font-bold text-slate-700 dark:text-slate-300">gpt-4o</span> is required for OCR.</p>
+                            <p>• <span className="font-bold">Groq:</span> We highly recommend <span className="font-bold text-slate-700 dark:text-slate-300">meta-llama/llama-4-scout-17b-16e-instruct</span> (vision-enabled and extremely fast).</p>
                           </div>
                         )}
+                      </div>
+
+                      {settings.provider !== 'ollama' && (
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('apiKeyLabel')}</label>
+                          <input
+                            type="password"
+                            value={providerConfigs[settings.provider]?.apiKey || ''}
+                            onChange={(e) => setProviderConfigs({
+                              ...providerConfigs,
+                              [settings.provider]: { ...providerConfigs[settings.provider], apiKey: e.target.value }
+                            })}
+                            placeholder={`Enter your ${settings.provider === 'openai' ? 'OpenAI or Groq' : 'Gemini'} API key`}
+                            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                          />
+                        </div>
+                      )}
+
+                      {(settings.provider === 'openai' || settings.provider === 'ollama') && (
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('apiEndpointLabel')}</label>
+                          <input
+                            type="text"
+                            value={providerConfigs[settings.provider]?.endpoint || ''}
+                            onChange={(e) => setProviderConfigs({
+                              ...providerConfigs,
+                              [settings.provider]: { ...providerConfigs[settings.provider], endpoint: e.target.value }
+                            })}
+                            placeholder={
+                              settings.provider === 'ollama' ? 'http://localhost:11434/v1/chat/completions' : 
+                              'https://api.openai.com/v1/chat/completions'
+                            }
+                            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                          />
+                          {settings.provider === 'openai' && (
+                            <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
+                              Leave blank for default OpenAI. For Groq, set to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[9px]">https://api.groq.com/openai/v1/chat/completions</code>
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 py-1">
+                        <input
+                          type="checkbox"
+                          id="useLlmForOcr"
+                          checked={settings.useLlmForOcr || false}
+                          onChange={(e) => setSettings({ ...settings, useLlmForOcr: e.target.checked })}
+                          className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                        />
+                        <label htmlFor="useLlmForOcr" className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                          {t('useLlmOcrLabel')}
+                          <span className="block text-[10px] text-slate-500 dark:text-slate-500 font-normal">{t('useLlmOcrSublabel')}</span>
+                        </label>
+                      </div>
+
+                      <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 flex flex-col gap-3">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('modelTempLabel')}</label>
+                            <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              {(settings.temperature ?? 0.2).toFixed(1)}
+                            </span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.0"
+                            max="1.0"
+                            step="0.1"
+                            value={settings.temperature ?? 0.2}
+                            onChange={(e) => setSettings({ ...settings, temperature: parseFloat(e.target.value) })}
+                            className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
+                          />
+                          <div className="flex justify-between text-[8px] text-slate-400 dark:text-slate-500 mt-1">
+                            <span>{t('deterministic')}</span>
+                            <span>{t('creative')}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('autoTagStrategyLabel')}</label>
+                          <select
+                            value={settings.autoTagStrategy || 'hybrid'}
+                            onChange={(e) => setSettings({ ...settings, autoTagStrategy: e.target.value as any })}
+                            className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                          >
+                            <option value="hybrid">{t('autoTagHybrid')}</option>
+                            <option value="local">{t('autoTagLocal')}</option>
+                            <option value="none">{t('autoTagNone')}</option>
+                          </select>
+                          <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
+                            {t('autoTagHelp')}
+                          </p>
+                        </div>
+
+                        <div className="mt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowAdvancedAI(!showAdvancedAI)}
+                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer flex items-center gap-1 focus:outline-none"
+                          >
+                            {showAdvancedAI ? t('hideAdvancedPrompt') : t('showAdvancedPrompt')}
+                          </button>
+
+                          {showAdvancedAI && (
+                            <div className="mt-3 flex flex-col gap-3 pl-1 border-l-2 border-indigo-100 dark:border-indigo-900/60">
+                              <div>
+                                <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customOcrPromptLabel')}</label>
+                                <textarea
+                                  value={settings.customOcrPrompt || ''}
+                                  onChange={(e) => setSettings({ ...settings, customOcrPrompt: e.target.value })}
+                                  placeholder="Leave empty for default instructions..."
+                                  rows={2}
+                                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
+                                />
+                                <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
+                                  {t('customOcrPromptHelp')}
+                                </p>
+                              </div>
+
+                              <div>
+                                <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customSummaryPromptLabel')}</label>
+                                <textarea
+                                  value={settings.customSummaryPrompt || ''}
+                                  onChange={(e) => setSettings({ ...settings, customSummaryPrompt: e.target.value })}
+                                  placeholder="E.g. Summarize this in 3 bullet points: {{text}}"
+                                  rows={2}
+                                  className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
+                                />
+                                <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
+                                  {t('customSummaryPromptHelp')}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -664,30 +662,30 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     className="flex flex-col gap-4"
                   >
                     <div>
-                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Color Theme</label>
+                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('colorThemeLabel')}</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {(['light', 'dark', 'system'] as const).map((t) => (
+                        {(['light', 'dark', 'system'] as const).map((tVal) => (
                           <button
-                            key={t}
+                            key={tVal}
                             type="button"
-                            onClick={() => setTheme(t)}
+                            onClick={() => setTheme(tVal)}
                             className={`rounded border py-2 text-xs font-bold capitalize transition-all cursor-pointer ${
-                              theme === t 
+                              theme === tVal 
                                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                           >
-                            {t}
+                            {tVal === 'light' ? t('themeLight') : tVal === 'dark' ? t('themeDark') : t('themeSystem')}
                           </button>
                         ))}
                       </div>
                       <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Choose how the vault looks. &quot;System&quot; will match your operating system&apos;s dark or light mode preference.
+                        {t('colorThemeHelp')}
                       </p>
                     </div>
 
                     <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
-                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Font Size Scale</label>
+                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('fontSizeScaleLabel')}</label>
                       <div className="grid grid-cols-3 gap-2">
                         {(['small', 'medium', 'large'] as const).map((sz) => (
                           <button
@@ -700,12 +698,35 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                           >
-                            {sz}
+                            {sz === 'small' ? t('fontSizeSmall') : sz === 'medium' ? t('fontSizeMedium') : t('fontSizeLarge')}
                           </button>
                         ))}
                       </div>
                       <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Scale the interface text size. &quot;Small&quot; fits more items, while &quot;Large&quot; increases visual comfort.
+                        {t('fontSizeHelp')}
+                      </p>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('languageLabel')}</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(['en', 'id'] as const).map((lang) => (
+                          <button
+                            key={lang}
+                            type="button"
+                            onClick={() => setLangLocal(lang)}
+                            className={`rounded border py-2 text-xs font-bold capitalize transition-all cursor-pointer ${
+                              langLocal === lang 
+                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {lang === 'en' ? 'English' : 'Bahasa Indonesia'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        {t('languageHelp')}
                       </p>
                     </div>
                   </motion.div>
@@ -721,18 +742,18 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     {/* Passkey Biometric Section */}
                     <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
                       <div>
-                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5 text-nowrap">
                           <Fingerprint className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
-                          Biometric Unlock (Beta)
+                          {t('biometricUnlockLabel')}
                         </h3>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-                          Link a Passkey (Touch ID, Face ID, or Windows Hello) to this vault. This creates a secondary secure key that decrypts your master key on this device.
+                          {t('biometricUnlockHelp')}
                         </p>
                       </div>
 
                       {!isPrfSupported ? (
                         <div className="rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-2.5 text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                          Biometrics are unavailable. Ensure you are using a modern browser, your context is secure (HTTPS/localhost), and your device supports biometrics.
+                          {t('biometricsUnavailableHelp')}
                         </div>
                       ) : (
                         <div className="flex flex-col gap-2 mt-1">
@@ -740,7 +761,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/20 dark:bg-indigo-950/10">
                               <div className="flex items-center gap-2">
                                 <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Biometric Unlock Linked</span>
+                                <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">{t('biometricUnlockLinkedText')}</span>
                               </div>
                               <button
                                 type="button"
@@ -748,7 +769,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                                 onClick={handleRemovePasskey}
                                 className="rounded bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                               >
-                                Disable Biometrics
+                                {t('disableBiometricsBtn')}
                               </button>
                             </div>
                           ) : (
@@ -761,12 +782,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                               {isPasskeyLoading ? (
                                 <>
                                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                                  Registering Biometrics...
+                                  {t('registeringBiometricsText')}
                                 </>
                               ) : (
                                 <>
                                   <Fingerprint className="h-3.5 w-3.5" />
-                                  Link Touch ID / Face ID
+                                  {t('linkTouchFaceBtn')}
                                 </>
                               )}
                             </button>
@@ -780,10 +801,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                       <div>
                         <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
                           <Download className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
-                          Vault Backup & Import
+                          {t('vaultBackupTitle')}
                         </h3>
                         <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-                          Export your encrypted local database to back up your data or move it to a different browser/device. Backups remain fully encrypted.
+                          {t('vaultBackupHelp')}
                         </p>
                       </div>
 
@@ -797,12 +818,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           {isExporting ? (
                             <>
                               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              Exporting...
+                              {t('exporting')}
                             </>
                           ) : (
                             <>
                               <Download className="h-3.5 w-3.5" />
-                              Export Encrypted Backup
+                              {t('exportEncryptedBtn')}
                             </>
                           )}
                         </button>
@@ -816,12 +837,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           {isImporting ? (
                             <>
                               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                              Importing...
+                              {t('importing')}
                             </>
                           ) : (
                             <>
                               <FileUp className="h-3.5 w-3.5" />
-                              Import Encrypted Backup
+                              {t('importEncryptedBtn')}
                             </>
                           )}
                         </button>
@@ -840,10 +861,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
-                            Application Update
+                            {t('appUpdateTitle')}
                           </h3>
                           <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-                            Manage application versions. PWAs cache assets aggressively and may need a hard refresh to load updates.
+                            {t('appUpdateHelp')}
                           </p>
                         </div>
                         <span className="text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full font-mono text-slate-600 dark:text-slate-400 font-bold shrink-0">
@@ -857,10 +878,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             <ArrowDownToLine className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                             <div className="flex-1 min-w-0">
                               <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                                Update Available: v{latestVersion}
+                                {t('updateAvailableBadgeTitle', { version: latestVersion })}
                               </h4>
                               <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 leading-relaxed mt-0.5">
-                                A newer version of OcularOCR is ready. Update now to refresh and apply the latest changes. Your local vault remains completely safe.
+                                {t('updateAvailableBadgeHelp')}
                               </p>
                             </div>
                           </div>
@@ -870,7 +891,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             className="w-full mt-1 rounded-md bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-3 py-2 text-xs font-bold text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
                           >
                             <ArrowDownToLine className="h-3.5 w-3.5" />
-                            UPDATE AND HARD REFRESH
+                            {t('updateHardRefreshBtn')}
                           </button>
                         </div>
                       ) : (
@@ -882,7 +903,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             className="w-full rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
                           >
                             <RefreshCw className={`h-3 w-3 ${isCheckingVersion ? 'animate-spin' : ''}`} />
-                            {isCheckingVersion ? 'Checking for updates...' : 'Check for Updates'}
+                            {isCheckingVersion ? t('checkingUpdatesText') : t('checkForUpdatesBtnText')}
                           </button>
                         </div>
                       )}
@@ -891,10 +912,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     <div className="border border-red-200 dark:border-red-950/60 bg-red-50/50 dark:bg-red-950/10 rounded p-4 flex flex-col gap-3">
                       <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
                         <AlertTriangle className="h-4.5 w-4.5" />
-                        Reset Vault Storage
+                        {t('resetVaultStorageTitle')}
                       </h3>
                       <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                        This action will permanently delete all encrypted documents, OCR texts, tags, summaries, and configurations from this device. All data resides solely on this client browser: there are no backups, and this deletion is irreversible.
+                        {t('resetVaultStorageHelp')}
                       </p>
 
                       <div className="flex items-start gap-2.5 py-1">
@@ -906,7 +927,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-red-500 dark:bg-slate-900 cursor-pointer mt-0.5"
                         />
                         <label htmlFor="confirmReset" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
-                          I understand that my vault data will be permanently deleted and cannot be recovered.
+                          {t('understandResetConfirm')}
                         </label>
                       </div>
 
@@ -916,7 +937,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                         onClick={handleResetVault}
                         className="mt-2 w-full rounded bg-red-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2"
                       >
-                        {isResetting ? 'Resetting Vault...' : 'Permanently Delete Vault & Reset'}
+                        {isResetting ? t('resettingVaultText') : t('permanentlyDeleteBtn')}
                       </button>
                     </div>
                   </motion.div>
@@ -932,7 +953,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                   className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer shadow-sm w-full md:w-auto justify-center"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Save Settings
+                  {t('saveSettingsBtn')}
                 </button>
               </div>
             )}

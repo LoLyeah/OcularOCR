@@ -9,6 +9,7 @@ import { extractTextFromImages } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
+import { useI18n } from '@/lib/i18n';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -16,6 +17,7 @@ interface FileManagerProps {
 }
 
 export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
+  const { t, language } = useI18n();
   const [docs, setDocs] = useState<(DocumentEntry & { decryptedTags: string[] })[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [search, setSearch] = useState('');
@@ -97,8 +99,10 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
 
         if (!isPdf && !isImage) {
           setCustomAlert({
-            title: "Unsupported File Format",
-            message: `"${file.name}" is not supported. Please upload PDFs or PNG/JPEG/WebP images.`
+            title: language === 'id' ? "Format File Tidak Didukung" : "Unsupported File Format",
+            message: language === 'id' 
+              ? `"${file.name}" tidak didukung. Silakan unggah PDF atau gambar PNG/JPEG/WebP.` 
+              : `"${file.name}" is not supported. Please upload PDFs or PNG/JPEG/WebP images.`
           });
           continue;
         }
@@ -120,15 +124,19 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       await loadDocs();
       if (successCount > 0) {
         toast({
-          title: successCount === 1 ? "File encrypted & stored" : `${successCount} files encrypted & stored`,
+          title: language === 'id' 
+            ? `${successCount} file berhasil dienkripsi & disimpan`
+            : successCount === 1 ? "File encrypted & stored" : `${successCount} files encrypted & stored`,
           variant: "success"
         });
       }
     } catch (err) {
       console.error('Upload failed', err);
       toast({
-        title: "Upload failed",
-        description: "Failed to encrypt and save the documents locally.",
+        title: language === 'id' ? "Gagal mengunggah" : "Upload failed",
+        description: language === 'id' 
+          ? "Gagal mengenkripsi dan menyimpan dokumen secara lokal."
+          : "Failed to encrypt and save the documents locally.",
         variant: "error"
       });
     } finally {
@@ -229,14 +237,14 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       setShowUrlInput(false);
       await loadDocs();
       toast({
-        title: "File downloaded & encrypted",
+        title: language === 'id' ? "File berhasil diunduh & dienkripsi" : "File downloaded & encrypted",
         variant: "success"
       });
     } catch (err: any) {
       console.error('Import from URL failed', err);
       toast({
-        title: "Import failed",
-        description: err.message || "Failed to download and encrypt file.",
+        title: language === 'id' ? "Gagal mengimpor" : "Import failed",
+        description: err.message || (language === 'id' ? "Gagal mengunduh dan mengenkripsi file." : "Failed to download and encrypt file."),
         variant: "error"
       });
     } finally {
@@ -259,13 +267,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       setSelectedDocs(newSelected);
       await loadDocs();
       toast({
-        title: "Document deleted",
+        title: language === 'id' ? "Dokumen berhasil dihapus" : "Document deleted",
         variant: "success"
       });
     } catch (err: any) {
       toast({
-        title: "Delete failed",
-        description: err.message || "An error occurred while deleting the file.",
+        title: language === 'id' ? "Gagal menghapus" : "Delete failed",
+        description: err.message || (language === 'id' ? "Terjadi kesalahan saat menghapus file." : "An error occurred while deleting the file."),
         variant: "error"
       });
     } finally {
@@ -276,7 +284,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   const executeBulkDelete = async () => {
     const totalCount = selectedDocs.size;
     setIsProcessingBulk(true);
-    setBulkProgress(`Deleting ${totalCount} documents...`);
+    setBulkProgress(language === 'id' ? `Menghapus ${totalCount} dokumen...` : `Deleting ${totalCount} documents...`);
     try {
       for (const id of Array.from(selectedDocs)) {
         await deleteDocument(id);
@@ -284,13 +292,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       setSelectedDocs(new Set());
       await loadDocs();
       toast({
-        title: `${totalCount} documents deleted`,
+        title: language === 'id' ? `${totalCount} dokumen berhasil dihapus` : `${totalCount} documents deleted`,
         variant: "success"
       });
     } catch (err: any) {
       toast({
-        title: "Bulk delete failed",
-        description: err.message || "An error occurred while deleting.",
+        title: language === 'id' ? "Gagal menghapus masal" : "Bulk delete failed",
+        description: err.message || (language === 'id' ? "Terjadi kesalahan saat menghapus." : "An error occurred while deleting."),
         variant: "error"
       });
     } finally {
@@ -339,7 +347,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     setNewTagValue('');
     await loadDocs();
     toast({
-      title: `Tag "${tagToAdd}" added`,
+      title: language === 'id' ? `Tag "${tagToAdd}" ditambahkan` : `Tag "${tagToAdd}" added`,
       variant: "success"
     });
   };
@@ -358,7 +366,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     });
     await loadDocs();
     toast({
-      title: "Tag removed",
+      title: language === 'id' ? "Tag dihapus" : "Tag removed",
       variant: "success"
     });
   };
@@ -399,7 +407,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     setTaggingDocId(null);
     await loadDocs();
     toast({
-      title: `Tag "${tag}" added`,
+      title: language === 'id' ? `Tag "${tag}" ditambahkan` : `Tag "${tag}" added`,
       variant: "success"
     });
   };
@@ -411,14 +419,16 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     const docsWithOcr = docsToProcess.filter(d => d.encryptedOcrText && d.ocrTextIv);
     if (docsWithOcr.length === 0) {
       setCustomAlert({
-        title: "Auto-Tagging Notice",
-        message: "None of the selected documents have extracted OCR data. Please run OCR on them first."
+        title: language === 'id' ? "Pemberitahuan Auto-Tagging" : "Auto-Tagging Notice",
+        message: language === 'id' 
+          ? "Tidak ada dokumen yang dipilih yang memiliki data OCR. Silakan jalankan OCR terlebih dahulu."
+          : "None of the selected documents have extracted OCR data. Please run OCR on them first."
       });
       return;
     }
 
     setIsProcessingBulk(true);
-    setBulkProgress(`Analyzing and auto-tagging ${docsWithOcr.length} documents...`);
+    setBulkProgress(language === 'id' ? `Menganalisis dan auto-tagging ${docsWithOcr.length} dokumen...` : `Analyzing and auto-tagging ${docsWithOcr.length} documents...`);
 
     try {
       const encryptedSettings = await getSettings();
@@ -430,7 +440,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
 
       for (let i = 0; i < docsWithOcr.length; i++) {
         const doc = docsWithOcr[i];
-        setBulkProgress(`Auto-tagging ${i + 1} of ${docsWithOcr.length}: ${doc.name}`);
+        setBulkProgress(language === 'id' ? `Auto-tagging ${i + 1} dari ${docsWithOcr.length}: ${doc.name}` : `Auto-tagging ${i + 1} of ${docsWithOcr.length}: ${doc.name}`);
 
         try {
           const ocrText = await decryptString(doc.encryptedOcrText!, doc.ocrTextIv!, cryptoKey);
@@ -452,13 +462,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
 
       await loadDocs();
       toast({
-        title: `Auto-tagged ${docsWithOcr.length} documents`,
+        title: language === 'id' ? `Auto-tagging selesai untuk ${docsWithOcr.length} dokumen` : `Auto-tagged ${docsWithOcr.length} documents`,
         variant: "success"
       });
     } catch (err: any) {
       toast({
-        title: "Auto-tagging failed",
-        description: err.message || "An unexpected error occurred during bulk auto-tagging.",
+        title: language === 'id' ? "Gagal melakukan auto-tagging" : "Auto-tagging failed",
+        description: err.message || (language === 'id' ? "Terjadi kesalahan saat auto-tagging massal." : "An unexpected error occurred during bulk auto-tagging."),
         variant: "error"
       });
     } finally {
@@ -472,65 +482,69 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
     const docsToExport = docs.filter(d => selectedDocs.has(d.id) && d.encryptedOcrText && d.ocrTextIv);
     if (docsToExport.length === 0) {
       setCustomAlert({
-        title: "Export Notice",
-        message: "No selected documents have extracted OCR data. Please process OCR on them first."
+        title: language === 'id' ? "Pemberitahuan Ekspor" : "Export Notice",
+        message: language === 'id' 
+          ? "Tidak ada dokumen yang dipilih yang memiliki data OCR. Ekspor dibatalkan."
+          : "None of the selected documents have extracted OCR data. Export cancelled."
       });
       return;
     }
-    
-    setBulkProgress(`Exporting ${docsToExport.length} documents...`);
+
     setIsProcessingBulk(true);
-    
+    setBulkProgress(language === 'id' ? `Menghasilkan PDF gabungan untuk ${docsToExport.length} file...` : `Generating unified PDF for ${docsToExport.length} files...`);
+
     try {
       const { jsPDF } = await import('jspdf');
       const pdf = new jsPDF();
-      
+
       for (let i = 0; i < docsToExport.length; i++) {
         const doc = docsToExport[i];
         if (i > 0) pdf.addPage();
-        
+
         pdf.setFontSize(16);
         pdf.text(`Document: ${doc.name}`, 15, 20);
         pdf.setFontSize(10);
-        
+
         const ocrText = await decryptString(doc.encryptedOcrText!, doc.ocrTextIv!, cryptoKey);
         const lines = pdf.splitTextToSize(ocrText, 180);
-        
+
         let y = 30;
         for (let j = 0; j < lines.length; j++) {
           if (y > 280) {
             pdf.addPage();
-            y = 15;
+            y = 20;
           }
           pdf.text(lines[j], 15, y);
-          y += 6;
+          y += 5;
         }
       }
-      
+
       pdf.save(`vault-bulk-export-${Date.now()}.pdf`);
       toast({
-        title: "PDF exported successfully",
+        title: t('pdfExportSuccessToast'),
         variant: "success"
       });
     } catch (err: any) {
+      console.error(err);
       toast({
-        title: "Export failed",
+        title: t('pdfExportFailedToast'),
         description: err.message || "An unexpected error occurred during PDF generation.",
         variant: "error"
       });
     } finally {
       setIsProcessingBulk(false);
       setBulkProgress('');
+      setSelectedDocs(new Set());
     }
   };
 
   const handleBulkOcr = async () => {
     const docsToProcess = docs.filter(d => selectedDocs.has(d.id));
     if (docsToProcess.length === 0) return;
-    
+
     setIsProcessingBulk(true);
-    let successCount = 0;
-    
+    setBulkProgress(language === 'id' ? `Menjalankan OCR untuk ${docsToProcess.length} dokumen...` : `Running OCR for ${docsToProcess.length} documents...`);
+
     try {
       const encryptedSettings = await getSettings();
       let settings: AISettings | undefined;
@@ -539,63 +553,66 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
         settings = JSON.parse(decryptedStr);
       }
 
+      let successCount = 0;
       for (let i = 0; i < docsToProcess.length; i++) {
         const doc = docsToProcess[i];
-        setBulkProgress(`Processing ${i + 1} of ${docsToProcess.length}: ${doc.name}`);
-        
+        setBulkProgress(language === 'id' ? `Memproses ${i + 1} dari ${docsToProcess.length}: ${doc.name}` : `Processing ${i + 1} of ${docsToProcess.length}: ${doc.name}`);
+
         try {
           const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
-          let extractedText = '';
-          
+          let ocrText = '';
+
           if (settings?.useLlmForOcr) {
-            const imagesBase64: string[] = [];
             if (doc.type.includes('pdf')) {
               const canvases = await renderPdfToCanvas(decryptedBuffer);
-              canvases.forEach(canvas => imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8)));
+              const imagesBase64 = canvases.map(c => c.toDataURL('image/jpeg', 0.8));
+              ocrText = await extractTextFromImages(imagesBase64, settings);
             } else {
               const blob = new Blob([decryptedBuffer], { type: doc.type });
-              const fileUrl = URL.createObjectURL(blob);
-              const img = new Image();
-              img.src = fileUrl;
-              await new Promise((resolve) => { img.onload = resolve; });
+              const url = URL.createObjectURL(blob);
+              const img = document.createElement('img');
+              img.src = url;
+              await new Promise(resolve => img.onload = resolve);
               const canvas = document.createElement('canvas');
               canvas.width = img.width;
               canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
-              }
-              URL.revokeObjectURL(fileUrl);
-            }
-            if (imagesBase64.length > 0) {
-              extractedText = await extractTextFromImages(imagesBase64, settings);
+              canvas.getContext('2d')?.drawImage(img, 0, 0);
+              URL.revokeObjectURL(url);
+              const base64 = canvas.toDataURL('image/jpeg', 0.8);
+              ocrText = await extractTextFromImages([base64], settings);
             }
           } else {
             if (doc.type.includes('pdf')) {
               const canvases = await renderPdfToCanvas(decryptedBuffer);
+              let pageIdx = 1;
               for (const canvas of canvases) {
                 const text = await performOCR(canvas);
-                extractedText += text + '\n\n';
+                ocrText += `--- PAGE ${pageIdx} ---\n${text}\n\n`;
+                pageIdx++;
               }
             } else {
               const blob = new Blob([decryptedBuffer], { type: doc.type });
-              const fileUrl = URL.createObjectURL(blob);
-              const img = new Image();
-              img.src = fileUrl;
-              await new Promise((resolve) => { img.onload = resolve; });
-              extractedText = await performOCR(img);
-              URL.revokeObjectURL(fileUrl);
+              const url = URL.createObjectURL(blob);
+              const img = document.createElement('img');
+              img.src = url;
+              await new Promise(resolve => img.onload = resolve);
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              canvas.getContext('2d')?.drawImage(img, 0, 0);
+              URL.revokeObjectURL(url);
+              ocrText = await performOCR(canvas);
             }
           }
-          
-          const { encrypted, iv } = await encryptString(extractedText, cryptoKey);
+
+          const { encrypted, iv } = await encryptString(ocrText, cryptoKey);
           
           let encryptedTags = doc.encryptedTags;
           let tagsIv = doc.tagsIv;
+          
           try {
-            const suggested = await suggestTags(extractedText, doc.name, settings);
-            if (suggested.length > 0) {
+            if (settings?.autoTagStrategy !== 'none') {
+              const suggested = await suggestTags(ocrText, doc.name, settings);
               const mergedTags = Array.from(new Set([...(doc.decryptedTags || []), ...suggested]));
               const tagEncryption = await encryptString(JSON.stringify(mergedTags), cryptoKey);
               encryptedTags = tagEncryption.encrypted;
@@ -621,12 +638,12 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       
       await loadDocs();
       toast({
-        title: `OCR completed for ${successCount} documents`,
+        title: language === 'id' ? `OCR selesai untuk ${successCount} dokumen` : `OCR completed for ${successCount} documents`,
         variant: "success"
       });
     } catch (err: any) {
       toast({
-        title: "Bulk OCR failed",
+        title: language === 'id' ? "OCR massal gagal" : "Bulk OCR failed",
         description: err.message || "An unexpected error occurred during bulk processing.",
         variant: "error"
       });
@@ -651,7 +668,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="h-full w-full overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative"
+      className="h-full w-full overflow-hidden flex flex-col bg-white dark:bg-slate-900 relative animate-none"
     >
       <AnimatePresence>
         {isDragging && (
@@ -666,13 +683,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                 <UploadCloud className="h-8 w-8 animate-bounce" />
               </div>
               <p className="text-base font-bold text-indigo-900 dark:text-indigo-200">
-                Drop files here to encrypt & store securely
+                {t('dropFilesTitle')}
               </p>
               <p className="mt-2 text-xs text-indigo-500 dark:text-indigo-400">
-                Supported formats: PDF, PNG, JPEG, WebP
+                {t('supportedFormatsText')}
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[10.5px] bg-indigo-100/50 dark:bg-indigo-950/30 px-3 py-1 rounded text-indigo-700 dark:text-indigo-300 font-mono">
-                <span>All operations are 100% client-side & private</span>
+                <span>{t('clientSidePrivateInfo')}</span>
               </div>
             </div>
           </motion.div>
@@ -680,11 +697,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       </AnimatePresence>
 
       <div className="p-3 flex flex-col md:flex-row md:items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 gap-2.5">
-        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">Your Secure Documents</h2>
+        <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('yourSecureDocsTitle')}</h2>
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <input 
             type="text" 
-            placeholder="Search in vault..." 
+            placeholder={t('searchVaultPlaceholder')} 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white px-3 py-1.5 rounded flex-1 md:w-64 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -698,7 +715,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             }`}
           >
             <Link className="h-3 w-3" />
-            Add From URL
+            {t('addFromUrlBtn')}
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -708,12 +725,12 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             {isUploading ? (
               <>
                 <Loader2 className="h-3 w-3 animate-spin" />
-                Encrypting...
+                {t('encryptingText')}
               </>
             ) : (
               <>
                 <UploadCloud className="h-3 w-3" />
-                Import File
+                {t('importFileBtn')}
               </>
             )}
           </button>
@@ -743,7 +760,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <input
                     type="url"
                     required
-                    placeholder="Enter direct file link (e.g., https://example.com/file.pdf)"
+                    placeholder={t('enterDirectLinkPlaceholder')}
                     value={downloadUrl}
                     onChange={e => setDownloadUrl(e.target.value)}
                     className="w-full text-xs pl-8 pr-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -757,10 +774,10 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   {isDownloading ? (
                     <>
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      Importing...
+                      {t('importing')}
                     </>
                   ) : (
-                    'Download & Encrypt'
+                    t('downloadEncryptBtn')
                   )}
                 </button>
               </form>
@@ -780,7 +797,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             >
               <div className="flex flex-col items-center bg-white dark:bg-slate-900 p-6 rounded-lg shadow-xl border border-slate-200 dark:border-slate-800">
                 <Loader2 className="h-8 w-8 text-indigo-600 dark:text-indigo-400 animate-spin mb-4" />
-                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Processing Documents</p>
+                <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{t('processingDocsTitle')}</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{bulkProgress}</p>
               </div>
             </motion.div>
@@ -791,19 +808,19 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           <div className="mt-16 px-4 flex flex-col items-center justify-center">
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="max-w-lg mx-auto w-full border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 group"
+              className="max-w-lg mx-auto w-full border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-400 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-indigo-50/10 dark:hover:bg-indigo-950/10 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all duration-200 group animate-none"
             >
               <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-950 text-slate-400 dark:text-slate-500 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                <UploadCloud className="h-7 w-7 animate-float" />
+                <UploadCloud className="h-7 w-7" />
               </div>
               <p className="text-sm font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                Drag & drop files here, or click to browse
+                {t('dragDropOrClickHelp')}
               </p>
               <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                Supports PDF documents or PNG, JPEG, WebP images
+                {t('supportsPdfImagesHelp')}
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 dark:text-slate-400 font-mono">
-                <span>100% Client-Side Encryption (AES-GCM-256)</span>
+                <span>{t('clientSideEncryptionBadge')}</span>
               </div>
             </div>
           </div>
@@ -818,19 +835,21 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   className="sticky top-0 bg-indigo-50 dark:bg-indigo-900/30 border-b border-indigo-100 dark:border-indigo-800/50 z-20 overflow-hidden"
                 >
                   <div className="px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{selectedDocs.size} selected</span>
+                    <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                      {t('selectedCountText', { count: selectedDocs.size })}
+                    </span>
                     <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
                       <button onClick={handleBulkOcr} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
-                        <ScanText className="h-3.5 w-3.5" /> Bulk OCR
+                        <ScanText className="h-3.5 w-3.5" /> {t('bulkOcrBtn')}
                       </button>
                       <button onClick={handleBulkAutoTag} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
-                        <Tag className="h-3.5 w-3.5" /> Auto-Tag
+                        <Tag className="h-3.5 w-3.5" /> {t('autoTagBtn')}
                       </button>
                       <button onClick={handleBulkExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
-                        <Download className="h-3.5 w-3.5" /> Export PDF
+                        <Download className="h-3.5 w-3.5" /> {t('exportPdfBtn')}
                       </button>
                       <button onClick={() => setShowBulkDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors shadow-sm cursor-pointer">
-                        <Trash2 className="h-3.5 w-3.5" /> Bulk Delete
+                        <Trash2 className="h-3.5 w-3.5" /> {t('bulkDeleteBtn')}
                       </button>
                     </div>
                   </div>
@@ -850,11 +869,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-2">File Name</th>
-                  <th className="px-4 py-2">Tags</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2 hidden md:table-cell">Type</th>
-                  <th className="px-4 py-2 hidden md:table-cell">Date Imported</th>
+                  <th className="px-4 py-2">{t('fileNameCol')}</th>
+                  <th className="px-4 py-2">{t('tagsCol')}</th>
+                  <th className="px-4 py-2">{t('statusCol')}</th>
+                  <th className="px-4 py-2 hidden md:table-cell">{t('typeCol')}</th>
+                  <th className="px-4 py-2 hidden md:table-cell">{t('dateImportedCol')}</th>
                   <th className="px-4 py-2 w-10"></th>
                 </tr>
               </thead>
@@ -911,7 +930,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                                   autoFocus
                                   value={newTagValue}
                                   onChange={e => setNewTagValue(e.target.value)}
-                                  placeholder="Press Enter to add..."
+                                  placeholder={t('tagsInputPlaceholder')}
                                   className="px-1.5 py-0.5 rounded text-[10px] text-slate-700 dark:text-slate-200 border border-indigo-300 dark:border-indigo-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full bg-white dark:bg-slate-900"
                                   onBlur={() => setTimeout(() => setTaggingDocId(null), 200)}
                                   onKeyDown={(e) => {
@@ -948,7 +967,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                           doc.encryptedSummary ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 
                           doc.encryptedOcrText ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                         }`}>
-                          {doc.encryptedSummary ? 'SUMMARIZED' : doc.encryptedOcrText ? 'INDEXED' : 'STORED'}
+                          {doc.encryptedSummary ? (language === 'id' ? 'RINGKASAN' : 'SUMMARIZED') : doc.encryptedOcrText ? (language === 'id' ? 'TERINDEKS' : 'INDEXED') : (language === 'id' ? 'DISIMPAN' : 'STORED')}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400 uppercase text-[10px] font-bold tracking-wider hidden md:table-cell">
@@ -994,9 +1013,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Document Permanently?</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{t('deleteDocSingleTitle')}?</h3>
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Are you sure you want to delete <span className="font-semibold text-slate-700 dark:text-slate-300">&ldquo;{docs.find(d => d.id === deleteConfirmId)?.name}&rdquo;</span>? This action is irreversible and the encrypted data will be destroyed.
+                    {language === 'id' 
+                      ? `Apakah Anda yakin ingin menghapus "${docs.find(d => d.id === deleteConfirmId)?.name}"? Tindakan ini tidak dapat dibatalkan dan file terenkripsi akan dihancurkan.`
+                      : `Are you sure you want to delete "${docs.find(d => d.id === deleteConfirmId)?.name}"? This action is irreversible and the encrypted data will be destroyed.`}
                   </p>
                 </div>
               </div>
@@ -1005,13 +1026,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   onClick={() => setDeleteConfirmId(null)}
                   className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={executeDelete}
-                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer"
+                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer border-transparent"
                 >
-                  Delete File
+                  {t('deleteDocSingleConfirmBtn')}
                 </button>
               </div>
             </motion.div>
@@ -1039,9 +1060,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Delete Multiple Documents?</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    {t('bulkDeleteConfirmTitle', { count: selectedDocs.size })}
+                  </h3>
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Are you sure you want to delete <span className="font-bold text-slate-700 dark:text-slate-300">{selectedDocs.size} documents</span> permanently? This will destroy all encrypted data and summaries for the selected files.
+                    {t('bulkDeleteConfirmDesc', { count: selectedDocs.size })}
                   </p>
                 </div>
               </div>
@@ -1050,13 +1073,13 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   onClick={() => setShowBulkDeleteConfirm(false)}
                   className="px-3 py-1.5 rounded border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold transition-colors cursor-pointer"
                 >
-                  Cancel
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={executeBulkDelete}
-                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer"
+                  className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold transition-colors shadow-sm cursor-pointer border-transparent"
                 >
-                  Delete All
+                  {t('deleteDocsConfirmBtn')}
                 </button>
               </div>
             </motion.div>

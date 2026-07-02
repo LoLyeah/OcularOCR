@@ -11,6 +11,7 @@ import ReactMarkdown from 'react-markdown';
 import { getTagColors } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from './toast';
+import { useI18n } from '@/lib/i18n';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -43,6 +44,7 @@ export function parseOcrPages(text: string): { pageNumber: number; text: string 
 }
 
 export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps) {
+  const { t, language } = useI18n();
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string>('');
   const [summary, setSummary] = useState<string>('');
@@ -141,6 +143,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const handleRunOcr = async () => {
     setIsProcessingOcr(true);
     setActiveTab('ocr');
+    setError(null);
     try {
       const encryptedSettings = await getSettings();
       let settings: AISettings | undefined;
@@ -228,7 +231,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         tagsIv
       });
       toast({
-        title: "Text extracted successfully",
+        title: language === 'id' ? "Teks berhasil diekstrak" : "Text extracted successfully",
         variant: "success"
       });
     } catch (err: any) {
@@ -242,6 +245,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const handleSummarize = async () => {
     if (!ocrText) return;
     setIsSummarizing(true);
+    setError(null);
     try {
       const encryptedSettings = await getSettings();
       let settings: AISettings;
@@ -264,7 +268,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         summaryIv: iv
       });
       toast({
-        title: "Summary generated",
+        title: language === 'id' ? "Ringkasan berhasil dibuat" : "Summary generated",
         variant: "success"
       });
     } catch (err: any) {
@@ -323,7 +327,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         tagsIv: iv
       });
       toast({
-        title: `Tag "${trimmed}" added`,
+        title: language === 'id' ? `Tag "${trimmed}" ditambahkan` : `Tag "${trimmed}" added`,
         variant: "success"
       });
     } catch (err) {
@@ -344,7 +348,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         tagsIv: iv
       });
       toast({
-        title: "Tag removed",
+        title: language === 'id' ? "Tag dihapus" : "Tag removed",
         variant: "success"
       });
     } catch (err) {
@@ -412,7 +416,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       URL.revokeObjectURL(url);
     }
     toast({
-      title: `${type.toUpperCase()} exported successfully`,
+      title: language === 'id' ? `${type.toUpperCase()} berhasil diekspor` : `${type.toUpperCase()} exported successfully`,
       variant: "success"
     });
   };
@@ -432,7 +436,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         <div className="flex items-center gap-4 w-full sm:w-auto">
           <button
             onClick={onClose}
-            aria-label="Go back to files"
+            aria-label={language === 'id' ? "Kembali ke file" : "Go back to files"}
             className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -456,7 +460,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             )}
             <span className="relative z-10 flex items-center gap-1.5">
               <FileText className="h-3.5 w-3.5" />
-              Preview
+              {t('previewTab')}
             </span>
           </button>
           <button
@@ -474,7 +478,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             )}
             <span className="relative z-10 flex items-center gap-1.5">
               <ScanText className="h-3.5 w-3.5" />
-              Extracted Data
+              {t('textTab')}
             </span>
           </button>
         </div>
@@ -534,8 +538,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                       <Loader2 className="mb-3 h-6 w-6 animate-spin" />
                       <p>
                         {useLlmForOcr
-                          ? 'Running AI-powered optical character recognition...'
-                          : 'Running local optical character recognition...'}
+                          ? (language === 'id' ? 'Menjalankan OCR bertenaga AI...' : 'Running AI-powered optical character recognition...')
+                          : (language === 'id' ? 'Menjalankan OCR lokal...' : 'Running local optical character recognition...')}
                       </p>
                     </div>
                   ) : ocrText ? (
@@ -549,7 +553,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                               ocrViewMode === 'single' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                             }`}
                           >
-                            Single Page
+                            {language === 'id' ? 'Satu Halaman' : 'Single Page'}
                           </button>
                           <button
                             onClick={() => setOcrViewMode('all')}
@@ -557,20 +561,20 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                               ocrViewMode === 'all' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                             }`}
                           >
-                            All Extracted Text
+                            {language === 'id' ? 'Semua Teks' : 'All Extracted Text'}
                           </button>
                           <button
                             onClick={handleRunOcr}
                             className="px-2.5 py-1 text-[10.5px] font-bold rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
-                            title="Re-run optical character recognition"
+                            title={language === 'id' ? 'Jalankan ulang OCR' : 'Re-run optical character recognition'}
                           >
                             <RefreshCw className="h-3 w-3 text-indigo-500" />
-                            Redo OCR
+                            {language === 'id' ? 'Ekstrak Ulang' : 'Redo OCR'}
                           </button>
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-slate-400 mr-2">Export format:</span>
+                          <span className="text-[10px] font-mono text-slate-400 mr-2">{language === 'id' ? 'Format ekspor:' : 'Export format:'}</span>
                           {(['txt', 'md', 'pdf'] as const).map(type => (
                             <button
                               key={type}
@@ -595,7 +599,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                             <ChevronLeft className="h-3.5 w-3.5" />
                           </button>
                           <span className="text-[10.5px] font-bold text-slate-600 dark:text-slate-300">
-                            Page {selectedOcrPage} of {parsedOcrPagesList.length}
+                            {language === 'id' ? `Halaman ${selectedOcrPage} dari ${parsedOcrPagesList.length}` : `Page ${selectedOcrPage} of ${parsedOcrPagesList.length}`}
                           </span>
                           <button
                             disabled={selectedOcrPage === parsedOcrPagesList.length}
@@ -614,13 +618,13 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     </div>
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
-                      <p className="mb-4">No text data available for this document.</p>
+                      <p className="mb-4">{t('noOcrTextHelp')}</p>
                       <button
                         onClick={handleRunOcr}
                         className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
                       >
                         <ScanText className="h-4 w-4" />
-                        Extract Text & Data
+                        {t('extractTextBtn')}
                       </button>
                     </div>
                   )}
@@ -636,7 +640,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
                 >
                   <ScanText className="h-4 w-4" />
-                  Extract Text & Data
+                  {t('extractTextBtn')}
                 </button>
              </div>
           )}
@@ -648,7 +652,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   className="flex items-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   <RefreshCw className="h-4 w-4 text-indigo-500" />
-                  Re-extract Text & Data
+                  {t('reExtractTextBtn')}
                 </button>
              </div>
           )}
@@ -673,7 +677,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             <div className="flex items-center gap-2">
               <Brain className="h-4 w-4 text-indigo-500" />
               <span className={`text-xs font-bold text-slate-700 dark:text-slate-300 ${isCollapsed ? 'lg:hidden' : ''}`}>
-                AI Assistant & Tags
+                {t('aiAssistantTags')}
               </span>
             </div>
             
@@ -681,7 +685,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
               {isCollapsed ? (
                 <>
                   <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded font-medium mr-1 lg:hidden">
-                    Click to expand
+                    {t('clickToExpand')}
                   </span>
                   <ChevronUp className="h-3.5 w-3.5 text-slate-500 lg:hidden" />
                   <ChevronLeft className="h-3.5 w-3.5 text-slate-500 hidden lg:block" />
@@ -704,7 +708,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
               <Brain className="h-5 w-5 text-indigo-500" />
               <ChevronLeft className="h-4 w-4 text-indigo-500" />
               <div className="text-[9px] font-bold uppercase tracking-widest text-center [writing-mode:vertical-lr] rotate-180 mt-2 text-slate-500 dark:text-slate-400">
-                EXPAND PANEL
+                {t('expandPanel')}
               </div>
             </div>
           )}
@@ -715,7 +719,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             <div className="px-4 py-3.5 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-2 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-3">
                 <Tag className="h-4 w-4 text-indigo-500" />
-                Document Tags
+                {t('documentTags')}
               </div>
               
               <div className="flex flex-col gap-2.5">
@@ -728,14 +732,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     type="text"
                     value={tagInput}
                     onChange={e => setTagInput(e.target.value)}
-                    placeholder="Add custom tag..."
+                    placeholder={t('tagsInputPlaceholder')}
                     className="flex-1 px-2.5 py-1.5 rounded text-xs border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-100"
                   />
                   <button
                     type="submit"
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold transition-colors shadow-sm cursor-pointer border-transparent"
                   >
-                    Add
+                    {t('addBtn')}
                   </button>
                 </form>
 
@@ -762,14 +766,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     </AnimatePresence>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">No tags assigned to this document.</span>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic mt-1">{t('noTagsAssigned')}</span>
                 )}
 
                 {/* Suggestions Panel */}
                 {ocrText && (
                   <div className="mt-3 border-t border-slate-100 dark:border-slate-800/80 pt-2.5">
                     <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Suggested Categories</span>
+                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('suggestedCategories')}</span>
                       {isAutoTagging && <Loader2 className="h-3 w-3 animate-spin text-indigo-500" />}
                     </div>
                     {suggestedTags.length > 0 ? (
@@ -791,7 +795,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                         </AnimatePresence>
                       </div>
                     ) : (
-                      <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">No additional suggestions.</span>
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 italic">{t('noSuggestions')}</span>
                     )}
                   </div>
                 )}
@@ -800,32 +804,32 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
 
             <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-2">
               <Brain className="h-4 w-4 text-indigo-500" />
-              AI Assistant
+              {t('aiAssistant')}
             </div>
             
             <div className="flex-1 overflow-visible lg:overflow-y-auto p-4 custom-scrollbar">
               {!ocrText ? (
                 <div className="flex flex-col items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 min-h-[120px] lg:h-full">
-                  <p>Run OCR first to extract text before using AI analysis.</p>
+                  <p>{t('runOcrFirstHelp')}</p>
                 </div>
               ) : !summary && !isSummarizing ? (
                 <div className="flex flex-col items-center justify-center text-center min-h-[160px] lg:h-full">
                   <div className="mb-3 flex h-12 w-12 items-center justify-center rounded bg-indigo-50 dark:bg-indigo-900/30">
                     <Sparkles className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                  <h3 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">Document Insights</h3>
-                  <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Generate a secure summary and extract key data points using your configured LLM.</p>
+                  <h3 className="mb-1 text-sm font-bold text-slate-900 dark:text-slate-100">{t('insightsTitle')}</h3>
+                  <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{t('insightsSubTitle')}</p>
                   <button
                     onClick={handleSummarize}
-                    className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
+                    className="flex w-full items-center justify-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer border-transparent"
                   >
-                    Generate Summary
+                    {t('generateSummaryBtn')}
                   </button>
                 </div>
               ) : isSummarizing ? (
                 <div className="flex items-center gap-2 rounded border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-xs text-slate-600 dark:text-slate-300 font-medium">
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
-                  Processing via AI...
+                  {t('processingAi')}
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -852,7 +856,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                     className="flex w-full items-center justify-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    Regenerate Summary
+                    {t('regenerateSummaryBtn')}
                   </button>
                 </div>
               )}

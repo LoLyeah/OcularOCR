@@ -75,20 +75,33 @@ class TesseractWorkerPool {
   }
 
   private async createNewWorker(languages: string, allAreBundled: boolean): Promise<PoolWorker> {
-    const langPath = allAreBundled
-      ? `${window.location.origin}/tessdata`
-      : undefined; // default CDN
-
-    // Create worker. In Tesseract.js v5+, createWorker returns worker immediately
-    const worker = await createWorker(languages, 1, {
-      langPath,
-      gzip: true,
-    });
+    let worker;
+    let isBundled = allAreBundled;
+    
+    if (allAreBundled) {
+      try {
+        const langPath = `${window.location.origin}/tessdata`;
+        worker = await createWorker(languages, 1, {
+          langPath,
+          gzip: true,
+        });
+      } catch (err) {
+        console.warn('Failed to load local bundled traineddata, falling back to CDN...', err);
+        worker = await createWorker(languages, 1, {
+          gzip: true,
+        });
+        isBundled = false;
+      }
+    } else {
+      worker = await createWorker(languages, 1, {
+        gzip: true,
+      });
+    }
 
     const newPoolWorker: PoolWorker = {
       worker,
       currentLanguages: languages,
-      isBundledPath: allAreBundled,
+      isBundledPath: isBundled,
       busy: true
     };
     

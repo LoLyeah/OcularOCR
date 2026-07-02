@@ -336,6 +336,25 @@ export const translationDict: Translations = {
   pdfExportSuccessToast: { en: 'PDF exported successfully', id: 'PDF berhasil diekspor' },
   pdfExportFailedToast: { en: 'PDF export failed', id: 'Ekspor PDF gagal' },
 
+  // Missing Document Viewer keys
+  previewTab: { en: 'Preview', id: 'Pratinjau' },
+  textTab: { en: 'Extracted Text', id: 'Teks Ekstraksi' },
+  aiAssistantTags: { en: 'AI Assistant & Tags', id: 'Asisten AI & Tag' },
+  addBtn: { en: 'Add', id: 'Tambah' },
+  suggestedCategories: { en: 'Suggested Categories', id: 'Saran Kategori' },
+  noSuggestions: { en: 'No suggestions', id: 'Tidak ada saran' },
+  reExtractTextBtn: { en: 'Re-extract Text', id: 'Ekstrak Ulang Teks' },
+  clickToExpand: { en: 'Click to expand', id: 'Klik untuk memperluas' },
+  expandPanel: { en: 'EXPAND PANEL', id: 'PERLUAS PANEL' },
+  documentTags: { en: 'Document Tags', id: 'Tag Dokumen' },
+  noTagsAssigned: { en: 'No tags assigned to this document.', id: 'Tidak ada tag yang disematkan ke dokumen ini.' },
+  insightsTitle: { en: 'Document Insights', id: 'Wawasan Dokumen' },
+  insightsSubTitle: { en: 'Generate a secure summary and extract key data points using your configured LLM.', id: 'Hasilkan ringkasan aman dan ekstrak poin data penting menggunakan LLM Anda.' },
+  runOcrFirstHelp: { en: 'Run OCR first to extract text before using AI analysis.', id: 'Jalankan OCR terlebih dahulu untuk mengekstrak teks sebelum menggunakan analisis AI.' },
+  processingAi: { en: 'Processing via AI...', id: 'Memproses via AI...' },
+  extractTextBtn: { en: 'Extract Text', id: 'Ekstrak Teks' },
+  aiAssistant: { en: 'AI Assistant', id: 'Asisten AI' },
+
   // Version/PWA Banners
   updateCheckingToast: { en: 'Checking for updates', id: 'Memeriksa pembaruan' },
   updateCheckingToastDesc: { en: 'Fetching the latest version from server...', id: 'Mengambil versi terbaru dari server...' },

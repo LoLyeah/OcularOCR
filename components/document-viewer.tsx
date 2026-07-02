@@ -60,6 +60,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   const [ocrProgressText, setOcrProgressText] = useState('');
   const [useLlmForOcr, setUseLlmForOcr] = useState(false);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['eng']);
   const [isSummarizing, setIsSummarizing] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
@@ -141,6 +142,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
             const settings = JSON.parse(decryptedStr) as AISettings;
             setUseLlmForOcr(!!settings?.useLlmForOcr);
+            if (settings?.ocrLanguages) {
+              setSelectedLanguages(settings.ocrLanguages);
+            }
           } catch (e) {
             console.error('Failed to decrypt settings for OCR check', e);
           }
@@ -238,7 +242,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           }))
         };
       } else {
-        const languages = settings?.ocrLanguages?.join('+') || 'eng';
+        const languages = selectedLanguages.join('+') || 'eng';
         const total = canvases.length;
         
         const ocrResult = await performOCR(
@@ -519,6 +523,59 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const parsedOcrPagesList = parseOcrPages(ocrText);
   const activeOcrPageText = parsedOcrPagesList.find(p => p.pageNumber === selectedOcrPage)?.text || ocrText;
 
+  const LANGUAGES_LIST = [
+    { code: 'eng', label: 'EN', title: 'English' },
+    { code: 'ind', label: 'ID', title: 'Indonesian' },
+    { code: 'spa', label: 'ES', title: 'Spanish' },
+    { code: 'fra', label: 'FR', title: 'French' },
+    { code: 'deu', label: 'DE', title: 'German' },
+    { code: 'chi_sim', label: 'ZH', title: 'Chinese (Simplified)' },
+    { code: 'jpn', label: 'JA', title: 'Japanese' },
+    { code: 'ara', label: 'AR', title: 'Arabic' },
+    { code: 'hin', label: 'HI', title: 'Hindi' },
+  ];
+
+  const renderLanguageSelector = () => {
+    if (useLlmForOcr) return null;
+
+    return (
+      <div className="flex flex-col items-center gap-1.5 mb-3">
+        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500">
+          {language === 'id' ? 'Bahasa Deteksi:' : 'Detection Languages:'}
+        </span>
+        <div className="flex flex-wrap justify-center gap-1 max-w-sm">
+          {LANGUAGES_LIST.map(lang => {
+            const isSelected = selectedLanguages.includes(lang.code);
+            return (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => {
+                  let next;
+                  if (isSelected) {
+                    if (selectedLanguages.length <= 1) return;
+                    next = selectedLanguages.filter(c => c !== lang.code);
+                  } else {
+                    next = [...selectedLanguages, lang.code];
+                  }
+                  setSelectedLanguages(next);
+                }}
+                className={`px-2 py-0.5 text-[9px] font-bold rounded border transition-colors cursor-pointer ${
+                  isSelected
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/40 dark:border-indigo-800/40 dark:text-indigo-400 font-extrabold'
+                    : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+                title={lang.title}
+              >
+                {lang.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <motion.div 
       initial={{ x: '100%' }}
@@ -734,6 +791,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   ) : (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
                       <p className="mb-4">{t('noOcrTextHelp')}</p>
+                      {renderLanguageSelector()}
                       <button
                         onClick={handleRunOcr}
                         className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
@@ -749,7 +807,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           </div>
           
           {activeTab === 'preview' && !ocrText && !isProcessingOcr && (
-             <div className="mx-auto mt-3 flex max-w-4xl justify-center">
+             <div className="mx-auto mt-3 flex flex-col items-center max-w-4xl justify-center">
+                {renderLanguageSelector()}
                 <button
                   onClick={handleRunOcr}
                   className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
@@ -761,7 +820,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           )}
           
           {activeTab === 'preview' && ocrText && !isProcessingOcr && (
-             <div className="mx-auto mt-3 flex max-w-4xl justify-center">
+             <div className="mx-auto mt-3 flex flex-col items-center max-w-4xl justify-center">
+                {renderLanguageSelector()}
                 <button
                   onClick={handleRunOcr}
                   className="flex items-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"

@@ -9,9 +9,20 @@ async function autoRotateCanvasIfNeeded(
   threshold: number,
   allAreBundled: boolean
 ): Promise<{ rotatedCanvas: HTMLCanvasElement; detectedRotation: number; confidence: number }> {
-  // Downsample to 150x150 for speed
-  const sampleW = 150;
-  const sampleH = 150;
+  // Resize to max 800px preserving aspect ratio
+  const maxDim = 800;
+  let sampleW = canvas.width;
+  let sampleH = canvas.height;
+  if (sampleW > maxDim || sampleH > maxDim) {
+    if (sampleW > sampleH) {
+      sampleH = Math.round((sampleH * maxDim) / sampleW);
+      sampleW = maxDim;
+    } else {
+      sampleW = Math.round((sampleW * maxDim) / sampleH);
+      sampleH = maxDim;
+    }
+  }
+
   const sampleCanvas = document.createElement('canvas');
   sampleCanvas.width = sampleW;
   sampleCanvas.height = sampleH;
@@ -19,30 +30,52 @@ async function autoRotateCanvasIfNeeded(
   if (!sCtx) return { rotatedCanvas: canvas, detectedRotation: 0, confidence: 0 };
   sCtx.drawImage(canvas, 0, 0, sampleW, sampleH);
 
-  // We will run Tesseract on 4 rotations using a temporary worker
-  const angles = [0, 90, 180, 270];
+  let tempWorker;
   let bestAngle = 0;
   let bestConf = -1;
+  let zeroConf = 0;
 
-  let tempWorker;
   try {
-    const langPath = allAreBundled
-      ? `${window.location.origin}/tessdata`
-      : undefined;
-      
-    tempWorker = await createWorker(language, 1, {
-      langPath,
-      gzip: true,
-    });
+    if (allAreBundled) {
+      try {
+        const langPath = `${window.location.origin}/tessdata`;
+        tempWorker = await createWorker(language, 1, {
+          langPath,
+          gzip: true,
+        });
+      } catch (e) {
+        console.warn("Failed to create local rotation check worker, using CDN...", e);
+        tempWorker = await createWorker(language, 1, {
+          gzip: true,
+        });
+      }
+    } else {
+      tempWorker = await createWorker(language, 1, {
+        gzip: true,
+      });
+    }
 
-    for (const angle of angles) {
-      const rotatedSample = rotateCanvas(sampleCanvas, angle);
-      const ret = await tempWorker.recognize(rotatedSample);
-      const conf = ret.data?.confidence ?? 0;
-      
-      if (conf > bestConf) {
-        bestConf = conf;
-        bestAngle = angle;
+    // 1. Check 0 degrees (optimistic orientation check)
+    const ret0 = await tempWorker.recognize(sampleCanvas);
+    zeroConf = ret0.data?.confidence ?? 0;
+    bestConf = zeroConf;
+    bestAngle = 0;
+
+    // If 0-degree confidence is already very high, we assume it's correct
+    if (zeroConf >= 70) {
+      console.log(`Auto-rotation check: 0 deg confidence is high (${zeroConf.toFixed(1)}%). Skipping other rotations.`);
+    } else {
+      // 2. Otherwise test 90, 180, 270 degrees cardinally
+      const angles = [90, 180, 270];
+      for (const angle of angles) {
+        const rotatedSample = rotateCanvas(sampleCanvas, angle);
+        const ret = await tempWorker.recognize(rotatedSample);
+        const conf = ret.data?.confidence ?? 0;
+        
+        if (conf > bestConf) {
+          bestConf = conf;
+          bestAngle = angle;
+        }
       }
     }
   } catch (err) {
@@ -53,9 +86,11 @@ async function autoRotateCanvasIfNeeded(
     }
   }
 
-  // Tesseract confidence is 0-100. threshold is 1.0-10.0.
-  // Multiply threshold by 10 (e.g. 3.0 threshold -> 30% confidence).
-  if (bestAngle !== 0 && bestConf >= threshold * 10) {
+  // Only rotate if the best angle is cardinally different from 0,
+  // its confidence is above the threshold (e.g. 3.0 threshold -> 30%),
+  // and it is significantly better than 0-degree confidence by at least 15%.
+  if (bestAngle !== 0 && bestConf >= threshold * 10 && (bestConf - zeroConf) >= 15) {
+    console.log(`Auto-rotation applied: rotating ${bestAngle} deg (best confidence: ${bestConf.toFixed(1)}% vs 0 deg: ${zeroConf.toFixed(1)}%)`);
     const rotatedOriginal = rotateCanvas(canvas, bestAngle);
     return { rotatedCanvas: rotatedOriginal, detectedRotation: bestAngle, confidence: bestConf };
   }

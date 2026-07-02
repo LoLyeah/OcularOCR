@@ -963,7 +963,7 @@ export function Guide() {
               </p>
               <ul className="list-disc pl-5 space-y-1 mt-1 mb-3">
                 <li>Click the chat bubble next to any document or open the interactive Document Chat sidebar.</li>
-                <li>Ask natural language questions like <em>"What is the total invoice amount?"</em> or <em>"Summarize the contract terms."</em></li>
+                <li>Ask natural language questions like <em>&ldquo;What is the total invoice amount?&rdquo;</em> or <em>&ldquo;Summarize the contract terms.&rdquo;</em></li>
                 <li>Your queries and extracted document sections are sent securely to LLM endpoints to construct private answers.</li>
               </ul>
               <p className="text-slate-500 text-[11px] leading-relaxed">
@@ -1301,7 +1301,7 @@ export function Guide() {
                   <p className="mt-0.5">1. Quit Ollama from the menu bar status icon.</p>
                   <p className="mt-0.5">2. Open Terminal and set the environment variable:</p>
                   <pre className="mt-1 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
-                    launchctl setenv OLLAMA_ORIGINS "*"
+                    {`launchctl setenv OLLAMA_ORIGINS "*"`}
                   </pre>
                   <p className="mt-1">3. Relaunch Ollama from your Applications folder.</p>
                 </div>
@@ -1343,7 +1343,7 @@ Environment="OLLAMA_ORIGINS=*"`}
                 <li>Click the <strong>Settings</strong> button (gear icon) in the bottom-left corner of the sidebar.</li>
                 <li>Under <strong>AI Settings</strong>, select the **Ollama** provider.</li>
                 <li>Set the **Model Name** to match your local model name (e.g., <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">qwen2.5-vl:7b</code>).</li>
-                <li>Verify the **API Endpoint URL** is set to Ollama's local port: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">http://localhost:11434/v1</code>.</li>
+                <li>Verify the **API Endpoint URL** is set to Ollama&apos;s local port: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">http://localhost:11434/v1</code>.</li>
                 <li>Leave the **API Key** field blank, then click **Save Configurations**.</li>
               </ol>
 
@@ -1519,7 +1519,7 @@ Environment="OLLAMA_ORIGINS=*"`}
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold">3</span>
                   Ollama Local API Setup
                 </h3>
-                <p className="text-slate-500 mb-3">For a completely private, offline setup, OcularOCR connects directly to your local Ollama instance's OpenAI-compatible endpoint.</p>
+                <p className="text-slate-500 mb-3">For a completely private, offline setup, OcularOCR connects directly to your local Ollama instance&apos;s OpenAI-compatible endpoint.</p>
                 <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400 mb-3">
                   <li>Ensure Ollama is installed and running on your local machine.</li>
                   <li>Verify that CORS origin settings are configured correctly to allow browser connections.</li>

@@ -53,6 +53,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [tagInput, setTagInput] = useState('');
   
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  const [useLlmForOcr, setUseLlmForOcr] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
@@ -108,6 +109,18 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             console.error('Failed to decrypt tags', e);
           }
         }
+
+        // Fetch settings to check if LLM is used for OCR
+        const encryptedSettings = await getSettings();
+        if (encryptedSettings) {
+          try {
+            const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+            const settings = JSON.parse(decryptedStr) as AISettings;
+            setUseLlmForOcr(!!settings?.useLlmForOcr);
+          } catch (e) {
+            console.error('Failed to decrypt settings for OCR check', e);
+          }
+        }
       } catch (err) {
         console.error('Failed to load document', err);
       }
@@ -129,6 +142,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
         settings = JSON.parse(decryptedStr);
       }
+
+      setUseLlmForOcr(!!settings?.useLlmForOcr);
 
       let extractedText = '';
       
@@ -257,7 +272,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   useEffect(() => {
     if (!ocrText) {
       if (suggestedTags.length > 0) {
-        setSuggestedTags([]);
+        Promise.resolve().then(() => {
+          setSuggestedTags([]);
+        });
       }
       return;
     }
@@ -509,7 +526,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   {isProcessingOcr ? (
                     <div className="flex flex-col items-center justify-center py-20 text-slate-500 dark:text-slate-400">
                       <Loader2 className="mb-3 h-6 w-6 animate-spin" />
-                      <p>Running local optical character recognition...</p>
+                      <p>
+                        {useLlmForOcr
+                          ? 'Running AI-powered optical character recognition...'
+                          : 'Running local optical character recognition...'}
+                      </p>
                     </div>
                   ) : ocrText ? (
                     <div className="flex flex-col h-full gap-4">

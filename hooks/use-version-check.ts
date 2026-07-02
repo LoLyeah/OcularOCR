@@ -75,7 +75,9 @@ export function useVersionCheck() {
 
   useEffect(() => {
     // Initial check
-    checkForUpdate();
+    Promise.resolve().then(() => {
+      checkForUpdate();
+    });
 
     // Set up polling interval
     const timer = setInterval(() => {

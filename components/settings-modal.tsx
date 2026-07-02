@@ -454,9 +454,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 p-5 md:p-6 flex flex-col min-h-0 overflow-y-auto">
+        <div className="flex-1 p-5 md:p-6 flex flex-col min-h-0 overflow-y-auto custom-scrollbar">
           <form onSubmit={handleSave} className="flex-1 flex flex-col justify-between gap-5 min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1 custom-scrollbar">
               <AnimatePresence mode="wait">
                 {activeTab === 'ai' ? (
                   <motion.div

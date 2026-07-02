@@ -26,7 +26,8 @@ import {
   Tag,
   Eye,
   Menu,
-  X
+  X,
+  Play
 } from 'lucide-react';
 import { getSalt } from '@/lib/storage';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -47,184 +48,124 @@ function ModelRegistry() {
 
   const models = [
     {
-      name: 'Claude Sonnet 5',
-      description: 'Claude Sonnet 5 is a mid-tier large language model from Anthropic, released as a major leap in reasoning, vision capabilities, and multi-modal speed.',
+      name: 'GPT-5.2',
+      description: 'OpenAI’s premier proprietary vision-language foundation model. S-tier precision, state-of-the-art visual grounding, and high-fidelity structured JSON layouts.',
+      provider: 'OpenAI',
+      logoType: 'openai',
+      badge: 'Frontier VLM',
+      context: '256K Tokens',
+      accuracy: 99.3,
+      accuracyStr: '99.3%',
+      optimizedFor: 'Audit Reports & Structured Tables',
+      type: 'proprietary'
+    },
+    {
+      name: 'Claude 4.6',
+      description: 'Anthropic’s leading reasoning VLM. Exceptional layout reconstruction, extreme factual consistency, and visual action/computer-use capabilities.',
       provider: 'Anthropic',
       logoType: 'anthropic',
-      badge: 'Highly Recommended',
+      badge: 'Reasoning SOTA',
       context: '200K Tokens',
-      optimizedFor: 'Visual Layouts & Code',
-      accuracy: '98.4%'
+      accuracy: 99.0,
+      accuracyStr: '99.0%',
+      optimizedFor: 'Complex Invoices & Handwritings',
+      type: 'proprietary'
     },
     {
-      name: 'Claude Fable 5',
-      description: "Claude Fable 5 is Anthropic's first generally available Mythos-class large language model, featuring specialized storytelling, creative writing, and human-like voice orchestration.",
-      provider: 'Anthropic',
-      logoType: 'anthropic',
-      badge: 'Mythos Class',
-      context: '150K Tokens',
-      optimizedFor: 'Narratives & Creative Docs',
-      accuracy: '94.2%'
-    },
-    {
-      name: 'Gemma 4 12B',
-      description: 'Gemma 4 12B is an open-weight multimodal model from Google, featuring advanced text and vision processing at a highly efficient footprint.',
+      name: 'Gemini 3 Pro',
+      description: 'Google’s massive-context flagship model. Natively multimodal, permitting direct analysis of multi-thousand-page visual documents and full PDF archives.',
       provider: 'Google',
       logoType: 'google',
-      badge: 'Open Weight',
-      context: '8K Tokens',
-      optimizedFor: 'Edge/Local OCR',
-      accuracy: '91.8%'
-    },
-    {
-      name: 'Claude Opus 4.8',
-      description: "Claude Opus 4.8 is Anthropic's most capable generally available large language model, providing ultra-high-fidelity reasoning, complex coding, and stellar doc analysis.",
-      provider: 'Anthropic',
-      logoType: 'anthropic',
-      badge: 'Elite Tier',
-      context: '300K Tokens',
-      optimizedFor: 'Frontier Complex Logic',
-      accuracy: '99.1%'
+      badge: 'Infinite Context',
+      context: '2M Tokens',
+      accuracy: 98.9,
+      accuracyStr: '98.9%',
+      optimizedFor: 'Long-Form Books & PDF Libraries',
+      type: 'proprietary'
     },
     {
       name: 'Gemini 3.5 Flash',
-      description: 'Gemini 3.5 Flash is a multimodal language model developed by Google DeepMind and designed for speed, efficiency, and heavy-duty, low-latency OCR workloads.',
+      description: 'Google’s low-latency multimodal speedster. Engineered for rapid visual parsing, sub-second responses, and cost-effective bulk OCR workloads.',
       provider: 'Google',
       logoType: 'google',
       badge: 'OCR Speedster',
-      context: '1M+ Tokens',
-      optimizedFor: 'Bulk Multi-page Ingestion',
-      accuracy: '96.8%'
-    },
-    {
-      name: 'GPT-5.5',
-      description: 'GPT-5.5 is a multimodal large language model released by OpenAI on April 23, setting new records on visual and verbal standardized intelligence benchmarks.',
-      provider: 'OpenAI',
-      logoType: 'openai',
-      badge: 'Frontier SOTA',
-      context: '256K Tokens',
-      optimizedFor: 'Standardized Tests & Vision',
-      accuracy: '99.3%'
-    },
-    {
-      name: 'Qwen3.6 27B',
-      description: 'Qwen3.6-27B is a dense 27-billion-parameter multimodal language model developed by Alibaba, optimizing high-speed spatial-temporal vision and text reasoning.',
-      provider: 'Qwen',
-      logoType: 'qwen',
-      badge: 'Dense Multimodal',
-      context: '32K Tokens',
-      optimizedFor: 'Multilingual Document Extraction',
-      accuracy: '95.1%'
-    },
-    {
-      name: 'Claude Opus 4.7',
-      description: 'Claude Opus 4.7 is a proprietary multimodal language model developed by Anthropic, offering supreme document layout reconstruction and context comprehension.',
-      provider: 'Anthropic',
-      logoType: 'anthropic',
-      badge: 'Layout Expert',
-      context: '200K Tokens',
-      optimizedFor: 'Heavily Formatted Forms',
-      accuracy: '98.2%'
-    },
-    {
-      name: 'Qwen3.6 35B A3B',
-      description: 'Qwen3.6-35B-A3B is a sparse Mixture-of-Experts (MoE) multimodal language model, utilizing active parameters dynamically for robust multi-modal perception.',
-      provider: 'Qwen',
-      logoType: 'qwen',
-      badge: 'MoE Architecture',
-      context: '64K Tokens',
-      optimizedFor: 'Bilingual / Code Tasks',
-      accuracy: '94.8%'
-    },
-    {
-      name: 'Qwen3.6 Flash',
-      description: 'Qwen3.6-Flash is the production API variant of the Qwen3.6 model series, designed for ultra-fast, cost-effective visual extraction and lightweight document pipelines.',
-      provider: 'Qwen',
-      logoType: 'qwen',
-      badge: 'Fast API',
-      context: '16K Tokens',
-      optimizedFor: 'High-Throughput Parsing',
-      accuracy: '92.5%'
-    },
-    {
-      name: 'Gemma 4 26B A4B',
-      description: "Gemma 4 26B A4B is the Mixture-of-Experts variant in Google's Gemma 4 family, maintaining dynamic routing to deliver high intelligence with minimal compute.",
-      provider: 'Google',
-      logoType: 'google',
-      badge: 'Dynamic MoE',
-      context: '32K Tokens',
-      optimizedFor: 'Cost-Effective Reasoner',
-      accuracy: '94.0%'
-    },
-    {
-      name: 'Gemma 4 31B',
-      description: "Gemma 4 31B is the largest dense model in Google's Gemma 4 family, built from the ground up for massive reasoning, multilingual OCR, and advanced visual QA.",
-      provider: 'Google',
-      logoType: 'google',
-      badge: 'Dense Powerhouse',
-      context: '64K Tokens',
-      optimizedFor: 'Dense Multi-page Documents',
-      accuracy: '97.4%'
-    },
-    {
-      name: 'Qwen3.6 Plus',
-      description: "Qwen3.6 Plus is a flagship model in Alibaba's Qwen Plus series, designed for elite performance across complex visual comprehension and multi-lingual processing.",
-      provider: 'Qwen',
-      logoType: 'qwen',
-      badge: 'Flagship VLM',
-      context: '128K Tokens',
-      optimizedFor: 'Bilingual Translation & Tables',
-      accuracy: '96.5%'
-    },
-    {
-      name: 'GPT-5.4 Mini',
-      description: 'GPT-5.4 mini is a fast, cost-efficient model developed by OpenAI and released on a compact layout, optimized for high-volume text and vision inferences.',
-      provider: 'OpenAI',
-      logoType: 'openai',
-      badge: 'Cost-Effective',
-      context: '128K Tokens',
-      optimizedFor: 'Sub-second API Calls',
-      accuracy: '95.3%'
-    },
-    {
-      name: 'GPT-5.4 Nano',
-      description: 'GPT-5.4 nano is a high-throughput, edge-capable model developed by OpenAI and released on tiny architectures for instant sub-10ms response times.',
-      provider: 'OpenAI',
-      logoType: 'openai',
-      badge: 'Edge OCR',
-      context: '64K Tokens',
-      optimizedFor: 'Instant Mobile Snapshots',
-      accuracy: '91.2%'
-    },
-    {
-      name: 'GLM-OCR',
-      description: 'GLM-OCR is a multimodal OCR model for complex document understanding, built on advanced Chinese-English cross-modal networks with high-fidelity visual layout retention.',
-      provider: 'GLM',
-      logoType: 'glm',
-      badge: 'OCR Specialist',
-      context: '32K Tokens',
-      optimizedFor: 'Bilingual Scans & Invoices',
-      accuracy: '97.8%'
-    },
-    {
-      name: 'GPT-5.4',
-      description: 'GPT-5.4 is a proprietary multimodal large language model developed by OpenAI and released to drive enterprise-grade multi-turn conversational document understanding.',
-      provider: 'OpenAI',
-      logoType: 'openai',
-      badge: 'Enterprise Tier',
-      context: '128K Tokens',
-      optimizedFor: 'Deep Multi-turn Audit',
-      accuracy: '98.5%'
-    },
-    {
-      name: 'Gemini 3.1 Flash-Lite',
-      description: 'Gemini 3.1 Flash-Lite is a natively multimodal reasoning model from Google, designed to handle thousands of pages of text or images in its context window with lightning-fast speeds.',
-      provider: 'Google',
-      logoType: 'google',
-      badge: 'Lite Context',
       context: '1M Tokens',
-      optimizedFor: 'Rapid Long-form Reviews',
-      accuracy: '94.7%'
+      accuracy: 96.8,
+      accuracyStr: '96.8%',
+      optimizedFor: 'High-Throughput Mobile Ingestions',
+      type: 'proprietary'
+    },
+    {
+      name: 'Qwen3.5-397B-A17B',
+      description: 'Alibaba’s state-of-the-art Mixture-of-Experts (MoE) VLM. High-resolution spatial-temporal visual token routing for dense visual document reasoning.',
+      provider: 'Qwen',
+      logoType: 'qwen',
+      badge: 'MoE VLM',
+      context: '128K Tokens',
+      accuracy: 97.9,
+      accuracyStr: '97.9%',
+      optimizedFor: 'Multilingual Document Understanding',
+      type: 'open-source'
+    },
+    {
+      name: 'GOT-OCR 2.0',
+      description: 'A dedicated, highly optimized layout and math-aware OCR specialist. Unified pixel-to-text token model natively handling charts, formulas, and complex tables.',
+      provider: 'GOT-OCR',
+      logoType: 'default',
+      badge: 'Layout Specialist',
+      context: '16K Tokens',
+      accuracy: 98.2,
+      accuracyStr: '98.2%',
+      optimizedFor: 'Mathematical Formulas & Raw Charts',
+      type: 'open-source'
+    },
+    {
+      name: 'DeepSeek-OCR 2 (3B)',
+      description: 'DeepSeek’s lightweight yet powerful layout-aware document reader. Employs DeepEncoder V2 for native spatial text sequence comprehension.',
+      provider: 'DeepSeek',
+      logoType: 'deepseek',
+      badge: 'DeepEncoder V2',
+      context: '128K Tokens',
+      accuracy: 94.8,
+      accuracyStr: '94.8%',
+      optimizedFor: 'Dense Scanning & Cost-Saving local VLM',
+      type: 'open-source'
+    },
+    {
+      name: 'Surya v2',
+      description: 'A 650M parameter ultra-fast CPU-efficient multilingual document parser. Provides high-fidelity paragraph-level bounding box layouts.',
+      provider: 'Surya',
+      logoType: 'default',
+      badge: 'CPU Efficient',
+      context: '8K Tokens',
+      accuracy: 92.5,
+      accuracyStr: '92.5%',
+      optimizedFor: 'On-Device Text Line Layout Segmentation',
+      type: 'open-source'
+    },
+    {
+      name: 'Mistral OCR 4',
+      description: 'Mistral’s premier layout-to-markdown API pipeline. Directly transforms visual inputs into structured paragraph hierarchies and JSON structures.',
+      provider: 'Mistral',
+      logoType: 'mistral',
+      badge: 'Markdown Master',
+      context: '32K Tokens',
+      accuracy: 97.4,
+      accuracyStr: '97.4%',
+      optimizedFor: 'API Bounding Boxes & Markdown Layouts',
+      type: 'proprietary'
+    },
+    {
+      name: 'PaddleOCR v4',
+      description: 'Baidu’s industrial-scale production OCR. Exceptional throughput, industrial reliability, and top-tier accuracy for CJK multilingual documents.',
+      provider: 'Baidu',
+      logoType: 'default',
+      badge: 'Industrial Standard',
+      context: '4K Tokens',
+      accuracy: 97.1,
+      accuracyStr: '97.1%',
+      optimizedFor: 'High-Volume Production CJK Streams',
+      type: 'open-source'
     }
   ];
 
@@ -234,17 +175,40 @@ function ModelRegistry() {
                           m.optimizedFor.toLowerCase().includes(search.toLowerCase());
     
     if (filter === 'all') return matchesSearch;
-    if (filter === 'google') return matchesSearch && m.provider === 'Google';
-    if (filter === 'openai') return matchesSearch && m.provider === 'OpenAI';
-    if (filter === 'anthropic') return matchesSearch && m.provider === 'Anthropic';
-    if (filter === 'others') return matchesSearch && (m.provider === 'Qwen' || m.provider === 'GLM');
-    return matchesSearch;
+    return matchesSearch && m.type === filter;
   });
 
+  const borderColors: Record<string, string> = {
+    openai: 'border-emerald-200 dark:border-emerald-950/40 bg-emerald-50/5 dark:bg-emerald-950/5 hover:border-emerald-400 dark:hover:border-emerald-800/80',
+    anthropic: 'border-amber-200 dark:border-amber-950/40 bg-amber-50/5 dark:bg-amber-950/5 hover:border-amber-400 dark:hover:border-amber-800/80',
+    google: 'border-blue-200 dark:border-blue-950/40 bg-blue-50/5 dark:bg-blue-950/5 hover:border-blue-400 dark:hover:border-blue-800/80',
+    deepseek: 'border-cyan-200 dark:border-cyan-950/40 bg-cyan-50/5 dark:bg-cyan-950/5 hover:border-cyan-400 dark:hover:border-cyan-800/80',
+    mistral: 'border-orange-200 dark:border-orange-950/40 bg-orange-50/5 dark:bg-orange-950/5 hover:border-orange-400 dark:hover:border-orange-800/80',
+    default: 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700'
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Metrics Header Row */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 p-3 rounded-xl flex flex-col justify-center shadow-xs">
+          <span className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Total Models</span>
+          <span className="text-base sm:text-lg font-black text-slate-800 dark:text-white mt-0.5">{filteredModels.length}</span>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 p-3 rounded-xl flex flex-col justify-center shadow-xs">
+          <span className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Elite (98%+)</span>
+          <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+            {filteredModels.filter(m => m.accuracy >= 98).length} <span className="text-[10px] font-normal text-slate-400">sota</span>
+          </span>
+        </div>
+        <div className="bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 p-3 rounded-xl flex flex-col justify-center shadow-xs">
+          <span className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Max Context</span>
+          <span className="text-base sm:text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">2M <span className="text-[10px] font-bold text-slate-400">Tkn</span></span>
+        </div>
+      </div>
+
       {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between pb-2">
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
         {/* Search */}
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400 dark:text-slate-500" />
@@ -258,47 +222,62 @@ function ModelRegistry() {
         </div>
         
         {/* Filter Badges */}
-        <div className="flex flex-wrap gap-1.5">
-          {['all', 'google', 'openai', 'anthropic', 'others'].map(p => (
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg relative self-start sm:self-auto border border-slate-200/10">
+          {[
+            { id: 'all', label: 'All Models' },
+            { id: 'proprietary', label: 'Proprietary' },
+            { id: 'open-source', label: 'Open-Source' }
+          ].map(p => (
             <button
-              key={p}
-              onClick={() => setFilter(p)}
-              className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors border ${
-                filter === p 
-                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm' 
-                  : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              key={p.id}
+              onClick={() => setFilter(p.id)}
+              className={`relative px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                filter === p.id 
+                  ? 'text-slate-800 dark:text-slate-100 font-semibold' 
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
               }`}
             >
-              {p === 'others' ? 'Qwen & GLM' : p}
+              {filter === p.id && (
+                <motion.span 
+                  layoutId="brand-filter-pill" 
+                  className="absolute inset-0 bg-white dark:bg-slate-700 rounded-md shadow-sm z-0"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">{p.label}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Grid of 18 Models */}
+      {/* Grid of 10 Models */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {filteredModels.map(m => {
           const isSelected = selectedModel === m.name;
+          const themeClass = borderColors[m.logoType] || borderColors.default;
+          
           return (
-            <div
+            <motion.div
+              layout
+              whileHover={{ y: -3, transition: { duration: 0.15 } }}
               key={m.name}
               onClick={() => setSelectedModel(isSelected ? null : m.name)}
-              className={`p-3.5 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+              className={`p-3.5 rounded-xl border cursor-pointer flex flex-col justify-between transition-all duration-200 ${themeClass} ${
                 isSelected 
-                  ? 'bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-500 dark:border-indigo-500 shadow-md shadow-indigo-500/5' 
-                  : 'bg-white dark:bg-slate-900/40 border-slate-200/80 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm'
+                  ? 'ring-2 ring-indigo-500/50 border-transparent shadow-md' 
+                  : 'shadow-xs'
               }`}
             >
               <div>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     {m.logoType === 'anthropic' && (
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-[#F1EBE4] border border-[#D5C9BE] text-[#312E2B] font-serif text-[11px] font-black shadow-xs">
-                        AI
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-900/30 text-amber-700 dark:text-amber-400 shadow-xs font-serif text-[11px] font-black">
+                        A
                       </div>
                     )}
                     {m.logoType === 'google' && (
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-900/30 text-blue-600 dark:text-blue-400 shadow-xs">
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
                           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                           <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -314,6 +293,16 @@ function ModelRegistry() {
                         </svg>
                       </div>
                     )}
+                    {m.logoType === 'deepseek' && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200/50 dark:border-cyan-900/30 text-cyan-600 dark:text-cyan-400 shadow-xs font-black text-xs">
+                        D
+                      </div>
+                    )}
+                    {m.logoType === 'mistral' && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-900/30 text-orange-600 dark:text-orange-400 shadow-xs font-black text-xs">
+                        M
+                      </div>
+                    )}
                     {m.logoType === 'qwen' && (
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-900/30 text-violet-600 dark:text-violet-400 shadow-xs">
                         <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -321,9 +310,9 @@ function ModelRegistry() {
                         </svg>
                       </div>
                     )}
-                    {m.logoType === 'glm' && (
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-950 dark:bg-black border border-slate-800 text-white font-extrabold text-[9px] shadow-xs tracking-tighter">
-                        GLM
+                    {m.logoType === 'default' && (
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-900/30 text-violet-600 dark:text-violet-400 shadow-xs">
+                        <Cpu className="h-3.5 w-3.5" />
                       </div>
                     )}
                     <span className="font-bold text-slate-800 dark:text-slate-200 text-xs tracking-tight">{m.name}</span>
@@ -331,34 +320,71 @@ function ModelRegistry() {
                   <span className={`px-1.5 py-0.5 text-[8.5px] rounded font-semibold uppercase tracking-wider ${
                     isSelected 
                       ? 'bg-indigo-600 text-white' 
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400'
                   }`}>
                     {m.badge}
                   </span>
                 </div>
-                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-2 hover:line-clamp-none transition-all">
+                <p className="text-[10.5px] text-slate-500 dark:text-slate-400 line-clamp-2">
                   {m.description}
                 </p>
               </div>
 
-              <div className={`mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/60 flex flex-col gap-1 text-[10px] text-slate-500 transition-all ${
-                isSelected ? 'block' : 'hidden md:flex'
-              }`}>
-                <div className="flex justify-between">
-                  <span>Context: <strong className="text-slate-700 dark:text-slate-300 font-medium">{m.context}</strong></span>
-                  <span>Accuracy: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">{m.accuracy}</strong></span>
-                </div>
-                <div className="text-[9.5px] truncate">
-                  Optimized: <strong className="text-indigo-600 dark:text-indigo-400 font-semibold">{m.optimizedFor}</strong>
-                </div>
-              </div>
-            </div>
+              <AnimatePresence initial={false}>
+                {isSelected && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/80 text-[10px] text-slate-500 dark:text-slate-400 space-y-3"
+                  >
+                    {/* Accuracy Slider */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between font-medium">
+                        <span>Accuracy Precision</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">{m.accuracyStr}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }}
+                          animate={{ width: `${m.accuracy}%` }}
+                          transition={{ duration: 0.4 }}
+                          className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Specifications */}
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[9.5px]">
+                      <div>
+                        <span className="text-slate-400 block font-semibold">Context Limit</span>
+                        <span className="text-slate-700 dark:text-slate-300 font-medium">{m.context}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block font-semibold">Provider Type</span>
+                        <span className="text-slate-700 dark:text-slate-300 font-medium capitalize">{m.type}</span>
+                      </div>
+                    </div>
+
+                    {/* Optimized For Pill */}
+                    <div>
+                      <span className="block text-[8.5px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold mb-1">Optimized Strength</span>
+                      <span className="inline-block px-2 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 rounded text-[9.5px] font-medium leading-normal">
+                        {m.optimizedFor}
+                      </span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
           );
         })}
       </div>
     </div>
   );
 }
+
 
 export function Guide() {
   const [activeArticleId, setActiveArticleId] = useState<string>('welcome');
@@ -683,6 +709,90 @@ export function Guide() {
                   <span>PBKDF2 SHA-256 (100,000 iterations) + AES-GCM Encrypted.</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'getting-started',
+      category: 'user_guide',
+      title: 'Getting Started',
+      icon: Play,
+      renderContent: () => (
+        <div className="space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
+            <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">GUIDE / ONBOARDING</span>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Getting Started with OcularOCR</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              Follow this step-by-step onboarding guide to secure, process, and query your documents.
+            </p>
+          </div>
+
+          <div className="space-y-6 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {/* Step 1 */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">1</span>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Initialize and Unlock Your Vault</h3>
+              </div>
+              <p className="mb-2">
+                When you launch the app, you will be prompted to create or enter a master passphrase. This passphrase is the master key for your locally encrypted storage.
+              </p>
+              <div className="flex gap-2 items-start mt-2 p-2.5 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-amber-800 dark:text-amber-300">
+                <Lock className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Important Security Note:</span> We use <code className="bg-amber-100/50 dark:bg-amber-900/50 px-1 py-0.5 rounded">PBKDF2</code> derivation to generate your encryption keys entirely in the browser. <strong>We do not save your password on any server.</strong> If you lose your passphrase, your stored documents cannot be recovered.
+                </div>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">2</span>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Upload Your First PDF Document</h3>
+              </div>
+              <p className="mb-2">
+                Once inside the dashboard, use the file manager to import PDF files:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-1">
+                <li>Drag and drop files directly onto the dropzone or click the file upload panel.</li>
+                <li>Your files are automatically encrypted with AES-GCM before being stored in IndexedDB.</li>
+                <li>Assign tags manually to organize invoices, IDs, or receipts for fast retrieval.</li>
+              </ul>
+            </div>
+
+            {/* Step 3 */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">3</span>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Extract Text with OCR</h3>
+              </div>
+              <p className="mb-2">
+                To enable search and chat, you need to extract the text content from your documents:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-1">
+                <li>Click the document row to open the Document Viewer.</li>
+                <li>Click <span className="font-semibold text-indigo-600">Extract Text via OCR</span> to run local text extraction using Tesseract.js.</li>
+                <li>For handwritten or complex layouts, open the <span className="font-semibold text-indigo-600">Settings</span> panel to toggle <span className="font-semibold text-indigo-600">Use LLM for OCR</span> using state-of-the-art vision models.</li>
+              </ul>
+            </div>
+
+            {/* Step 4 */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">4</span>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Query and Summarize</h3>
+              </div>
+              <p className="mb-2">
+                Leverage local context to summarize, query, and gather insights from your vault:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-1">
+                <li>Click the chat bubble next to any document or open the interactive Document Chat sidebar.</li>
+                <li>Ask natural language questions like <em>"What is the total invoice amount?"</em> or <em>"Summarize the contract terms."</em></li>
+                <li>Your queries and extracted document sections are sent securely to LLM endpoints to construct private answers.</li>
+              </ul>
             </div>
           </div>
         </div>

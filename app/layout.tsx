@@ -25,6 +25,8 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
                 if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
                   document.documentElement.classList.add('dark');
                 }
+                const fontSize = localStorage.getItem('vault_font_size') || 'medium';
+                document.documentElement.classList.add('font-size-' + fontSize);
               } catch (e) {}
             `,
           }}

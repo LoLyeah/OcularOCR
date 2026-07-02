@@ -174,7 +174,20 @@ export async function suggestTags(text: string, filename: string, settings?: AIS
     return suggestTagsLocal('', filename);
   }
 
-  if (settings && settings.apiKey) {
+  const strategy = settings?.autoTagStrategy ?? 'hybrid';
+
+  if (strategy === 'none') {
+    return [];
+  }
+
+  if (strategy === 'local') {
+    return suggestTagsLocal(text, filename);
+  }
+
+  // strategy is 'hybrid'
+  const canUseAI = settings && (settings.apiKey || settings.provider === 'ollama');
+
+  if (canUseAI) {
     try {
       const aiTags = await suggestTagsAI(text, filename, settings);
       if (aiTags && aiTags.length > 0) {

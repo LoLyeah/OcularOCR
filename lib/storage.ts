@@ -26,6 +26,10 @@ export interface AISettings {
   endpoint: string; // for openai or ollama
   model: string;
   useLlmForOcr?: boolean;
+  temperature?: number;
+  customOcrPrompt?: string;
+  customSummaryPrompt?: string;
+  autoTagStrategy?: 'hybrid' | 'local' | 'none';
   configs?: Record<string, { apiKey: string; endpoint: string; model: string }>;
 }
 

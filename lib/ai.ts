@@ -2,16 +2,39 @@ import { AISettings } from './storage';
 import { GoogleGenAI } from '@google/genai';
 
 export async function summarizeText(text: string, settings: AISettings, tags?: string[]): Promise<string> {
-  let prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
-  if (tags && tags.length > 0) {
-    prompt = `Document Tags/Categories: ${tags.join(', ')}\n\nPlease provide a concise summary and extract key data points from the following document text, utilizing the tags to provide more accurate context and focus for the analysis:\n\n${text}`;
+  let prompt = '';
+  if (settings.customSummaryPrompt && settings.customSummaryPrompt.trim()) {
+    prompt = settings.customSummaryPrompt;
+    if (prompt.includes('{{tags}}')) {
+      prompt = prompt.replace('{{tags}}', tags && tags.length > 0 ? tags.join(', ') : 'None');
+    } else if (tags && tags.length > 0) {
+      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\n${prompt}`;
+    }
+    
+    if (prompt.includes('{{text}}')) {
+      prompt = prompt.replace('{{text}}', text);
+    } else if (prompt.includes('{{document_text}}')) {
+      prompt = prompt.replace('{{document_text}}', text);
+    } else {
+      prompt = `${prompt}\n\n${text}`;
+    }
+  } else {
+    prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
+    if (tags && tags.length > 0) {
+      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\nPlease provide a concise summary and extract key data points from the following document text, utilizing the tags to provide more accurate context and focus for the analysis:\n\n${text}`;
+    }
   }
+
+  const temp = settings.temperature !== undefined ? settings.temperature : 0.2;
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
     const response = await ai.models.generateContent({
       model: settings.model || 'gemini-3.5-flash',
       contents: prompt,
+      config: {
+        temperature: temp
+      }
     });
     return response.text || 'No summary generated.';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
@@ -33,7 +56,8 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 
     const body = {
       model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
-      messages: [{ role: 'user', content: prompt }]
+      messages: [{ role: 'user', content: prompt }],
+      temperature: temp
     };
 
     const res = await fetch(endpoint, {
@@ -55,7 +79,11 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {
-  const prompt = "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
+  const prompt = settings.customOcrPrompt && settings.customOcrPrompt.trim()
+    ? settings.customOcrPrompt
+    : "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
+
+  const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -68,6 +96,9 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     const response = await ai.models.generateContent({
       model: settings.model || 'gemini-3.5-flash',
       contents,
+      config: {
+        temperature: temp
+      }
     });
     return response.text || '';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
@@ -94,7 +125,8 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
 
     const body = {
       model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
-      messages: [{ role: 'user', content: contentArray }]
+      messages: [{ role: 'user', content: contentArray }],
+      temperature: temp
     };
 
     const res = await fetch(endpoint, {

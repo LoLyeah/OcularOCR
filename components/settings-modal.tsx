@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { X, Check, BrainCircuit, Palette } from 'lucide-react';
+import { X, Check, BrainCircuit, Palette, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AISettings, getSettings, saveSettings } from '@/lib/storage';
+import { AISettings, getSettings, saveSettings, clearVault } from '@/lib/storage';
 import { encryptString, decryptString } from '@/lib/crypto';
 import { useToast } from './toast';
 
@@ -11,12 +11,17 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'ai' | 'appearance'>('ai');
+  const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'system-reset'>('ai');
   const [settings, setSettings] = useState<AISettings>({
     provider: 'gemini',
     apiKey: '',
     endpoint: '',
-    model: ''
+    model: '',
+    useLlmForOcr: false,
+    temperature: 0.2,
+    customOcrPrompt: '',
+    customSummaryPrompt: '',
+    autoTagStrategy: 'hybrid'
   });
   
   // Keep track of provider-specific inputs so they don't bleed into each other
@@ -28,6 +33,13 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   const [initialTheme, setInitialTheme] = useState<'light' | 'dark' | 'system'>('system');
+  
+  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [initialFontSize, setInitialFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+  
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [showAdvancedAI, setShowAdvancedAI] = useState(false);
   
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,6 +53,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       setTheme(currentTheme);
       setInitialTheme(currentTheme);
 
+      // Load Font Size settings
+      const storedFontSize = localStorage.getItem('vault_font_size');
+      const currentFontSize = (storedFontSize === 'small' || storedFontSize === 'large') ? storedFontSize : 'medium';
+      setFontSize(currentFontSize as any);
+      setInitialFontSize(currentFontSize as any);
+
       // Load AI settings
       const encrypted = await getSettings();
       if (encrypted) {
@@ -53,7 +71,15 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
               parsed.endpoint = 'https://api.groq.com/openai/v1/chat/completions';
             }
           }
-          setSettings(parsed);
+          
+          setSettings(prev => ({
+            ...prev,
+            ...parsed,
+            temperature: parsed.temperature ?? 0.2,
+            autoTagStrategy: parsed.autoTagStrategy ?? 'hybrid',
+            customOcrPrompt: parsed.customOcrPrompt ?? '',
+            customSummaryPrompt: parsed.customSummaryPrompt ?? '',
+          }));
           
           if (parsed.configs) {
             if (parsed.configs.groq) {
@@ -98,6 +124,13 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     }
   }, [theme, isLoading]);
 
+  // Real-time font size preview effect
+  useEffect(() => {
+    if (isLoading) return;
+    document.documentElement.classList.remove('font-size-small', 'font-size-medium', 'font-size-large');
+    document.documentElement.classList.add(`font-size-${fontSize}`);
+  }, [fontSize, isLoading]);
+
   const handleCancel = () => {
     // Revert to initial theme
     if (initialTheme === 'system') {
@@ -112,6 +145,11 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     } else {
       document.documentElement.classList.remove('dark');
     }
+
+    // Revert to initial font size
+    document.documentElement.classList.remove('font-size-small', 'font-size-medium', 'font-size-large');
+    document.documentElement.classList.add(`font-size-${initialFontSize}`);
+
     onClose();
   };
 
@@ -137,6 +175,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       } else {
         localStorage.setItem('vault_theme', theme);
       }
+
+      // Save Font Size settings
+      localStorage.setItem('vault_font_size', fontSize);
       
       toast({
         title: "Settings saved",
@@ -155,6 +196,37 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     }
   };
 
+  const handleResetVault = async () => {
+    if (!confirmReset) return;
+    setIsResetting(true);
+    try {
+      // Clear localStorage configurations
+      localStorage.removeItem('vault_theme');
+      localStorage.removeItem('vault_font_size');
+      
+      // Clear database vault
+      await clearVault();
+      
+      toast({
+        title: "Vault reset successfully",
+        description: "Redirecting to initial setup...",
+        variant: "success"
+      });
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.error("Failed to reset vault", err);
+      toast({
+        title: "Reset failed",
+        description: "An error occurred while clearing the vault.",
+        variant: "error"
+      });
+      setIsResetting(false);
+    }
+  };
+
   if (isLoading) return null;
 
   return (
@@ -170,13 +242,14 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="flex flex-col md:flex-row w-full h-full md:h-auto md:max-h-[90vh] md:max-w-2xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden text-slate-900 dark:text-slate-100 rounded-none md:rounded-lg"
+        className="flex flex-col md:flex-row w-full h-full md:h-[600px] md:max-h-[90vh] md:max-w-2xl bg-white dark:bg-slate-900 shadow-xl overflow-hidden text-slate-900 dark:text-slate-100 rounded-none md:rounded-lg"
       >
         {/* Sidebar */}
         <div className="w-full md:w-48 bg-slate-50 dark:bg-slate-800/50 p-3 md:p-4 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto custom-scrollbar">
           <h2 className="hidden md:block mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2">Settings</h2>
           
           <button
+            type="button"
             onClick={() => setActiveTab('ai')}
             className={`flex items-center justify-center md:justify-start gap-2 px-3 py-2 rounded text-xs font-medium transition-colors cursor-pointer flex-1 md:flex-none whitespace-nowrap ${
               activeTab === 'ai' 
@@ -189,6 +262,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
           </button>
           
           <button
+            type="button"
             onClick={() => setActiveTab('appearance')}
             className={`flex items-center justify-center md:justify-start gap-2 px-3 py-2 rounded text-xs font-medium transition-colors cursor-pointer flex-1 md:flex-none whitespace-nowrap ${
               activeTab === 'appearance' 
@@ -199,12 +273,28 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             <Palette className="h-4 w-4 shrink-0" />
             Appearance
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('system-reset')}
+            className={`flex items-center justify-center md:justify-start gap-2 px-3 py-2 rounded text-xs font-medium transition-colors cursor-pointer flex-1 md:flex-none whitespace-nowrap ${
+              activeTab === 'system-reset' 
+                ? 'bg-red-50 text-red-700 dark:bg-red-950/20 dark:text-red-400 font-bold' 
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            System & Reset
+          </button>
         </div>
 
         {/* Content Area */}
         <div className="flex-1 p-5 md:p-6 flex flex-col min-h-0 overflow-y-auto">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold">{activeTab === 'ai' ? 'AI Processing Configuration' : 'Appearance Settings'}</h2>
+            <h2 className="text-sm font-bold">
+              {activeTab === 'ai' ? 'AI Processing Configuration' : 
+               activeTab === 'appearance' ? 'Appearance Settings' : 'System & Reset'}
+            </h2>
             <button onClick={handleCancel} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
               <X className="h-4 w-4" />
             </button>
@@ -310,7 +400,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                       </div>
                     )}
 
-                    <div className="flex items-center gap-3 py-2">
+                    <div className="flex items-center gap-3 py-1">
                       <input
                         type="checkbox"
                         id="useLlmForOcr"
@@ -323,8 +413,90 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                         <span className="block text-[10px] text-slate-500 dark:text-slate-500 font-normal">Extract text more intelligently using the AI model (requires vision support).</span>
                       </label>
                     </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 flex flex-col gap-3">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Model Temperature</label>
+                          <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {(settings.temperature ?? 0.2).toFixed(1)}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.0"
+                          max="1.0"
+                          step="0.1"
+                          value={settings.temperature ?? 0.2}
+                          onChange={(e) => setSettings({ ...settings, temperature: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
+                        />
+                        <div className="flex justify-between text-[8px] text-slate-400 dark:text-slate-500 mt-1">
+                          <span>Deterministic (0.0)</span>
+                          <span>Creative (1.0)</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Auto-Tagging Strategy</label>
+                        <select
+                          value={settings.autoTagStrategy || 'hybrid'}
+                          onChange={(e) => setSettings({ ...settings, autoTagStrategy: e.target.value as any })}
+                          className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
+                        >
+                          <option value="hybrid">Hybrid (AI + Rule-based)</option>
+                          <option value="local">Rule-based (Offline only)</option>
+                          <option value="none">Disabled (No auto-suggest)</option>
+                        </select>
+                        <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
+                          Choose how tags are suggested/generated for imported documents.
+                        </p>
+                      </div>
+
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowAdvancedAI(!showAdvancedAI)}
+                          className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 cursor-pointer flex items-center gap-1 focus:outline-none"
+                        >
+                          {showAdvancedAI ? 'Hide Advanced Prompt Controls' : 'Show Advanced Prompt Controls (System instructions)'}
+                        </button>
+
+                        {showAdvancedAI && (
+                          <div className="mt-3 flex flex-col gap-3 pl-1 border-l-2 border-indigo-100 dark:border-indigo-900/60">
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Custom OCR Prompt</label>
+                              <textarea
+                                value={settings.customOcrPrompt || ''}
+                                onChange={(e) => setSettings({ ...settings, customOcrPrompt: e.target.value })}
+                                placeholder="Leave empty for default instructions..."
+                                rows={2}
+                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
+                              />
+                              <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
+                                Instructions for AI vision models when extracting text from images.
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Custom Summary Prompt</label>
+                              <textarea
+                                value={settings.customSummaryPrompt || ''}
+                                onChange={(e) => setSettings({ ...settings, customSummaryPrompt: e.target.value })}
+                                placeholder="E.g. Summarize this in 3 bullet points: {{text}}"
+                                rows={2}
+                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
+                              />
+                              <p className="mt-0.5 text-[8px] text-slate-400 dark:text-slate-500">
+                                Customize summaries. Placeholders: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[8px] font-mono">{"{{text}}"}</code>, <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[8px] font-mono">{"{{tags}}"}</code>.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
-                ) : (
+                ) : activeTab === 'appearance' ? (
                   <motion.div
                     key="appearance"
                     initial={{ opacity: 0, x: 10 }}
@@ -355,21 +527,87 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                         Choose how the vault looks. &quot;System&quot; will match your operating system&apos;s dark or light mode preference.
                       </p>
                     </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4">
+                      <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Font Size Scale</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['small', 'medium', 'large'] as const).map((sz) => (
+                          <button
+                            key={sz}
+                            type="button"
+                            onClick={() => setFontSize(sz)}
+                            className={`rounded border py-2 text-xs font-bold capitalize transition-all cursor-pointer ${
+                              fontSize === sz 
+                                ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {sz}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Scale the interface text size. &quot;Small&quot; fits more items, while &quot;Large&quot; increases visual comfort.
+                      </p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="system-reset"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    transition={{ duration: 0.15 }}
+                    className="flex flex-col gap-4"
+                  >
+                    <div className="border border-red-200 dark:border-red-950/60 bg-red-50/50 dark:bg-red-950/10 rounded p-4 flex flex-col gap-3">
+                      <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <AlertTriangle className="h-4.5 w-4.5" />
+                        Reset Vault Storage
+                      </h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                        This action will permanently delete all encrypted documents, OCR texts, tags, summaries, and configurations from this device. All data resides solely on this client browser: there are no backups, and this deletion is irreversible.
+                      </p>
+
+                      <div className="flex items-start gap-2.5 py-1">
+                        <input
+                          type="checkbox"
+                          id="confirmReset"
+                          checked={confirmReset}
+                          onChange={(e) => setConfirmReset(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-red-600 focus:ring-red-500 dark:bg-slate-900 cursor-pointer mt-0.5"
+                        />
+                        <label htmlFor="confirmReset" className="text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                          I understand that my vault data will be permanently deleted and cannot be recovered.
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={!confirmReset || isResetting}
+                        onClick={handleResetVault}
+                        className="mt-2 w-full rounded bg-red-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-red-700 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        {isResetting ? 'Resetting Vault...' : 'Permanently Delete Vault & Reset'}
+                      </button>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
-            <div className="pt-4 flex justify-end shrink-0">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer shadow-sm w-full md:w-auto justify-center"
-              >
-                <Check className="h-3.5 w-3.5" />
-                Save Settings
-              </button>
-            </div>
+            {activeTab !== 'system-reset' && (
+              <div className="pt-4 flex justify-end shrink-0 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex items-center gap-2 rounded bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50 cursor-pointer shadow-sm w-full md:w-auto justify-center"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Save Settings
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </motion.div>

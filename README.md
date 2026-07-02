@@ -8,7 +8,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-blue.svg)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19.2-blue.svg)](https://react.dev/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4.3-blue.svg)](https://tailwindcss.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 </div>
 
@@ -122,3 +122,9 @@ OcularOCR is configured to run as a Progressive Web App:
 1. Open OcularOCR in a PWA-compatible browser (e.g., Chrome, Edge, Safari).
 2. Click the **Install** button on the bottom prompt or the install icon in the browser address bar.
 3. Once installed, OcularOCR will run in its own dedicated, distraction-free app window, caching essential code to work 100% offline.
+
+---
+
+## 📄 License
+
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](file:///Users/handi/Github/OcularOCR/LICENSE) file for details.

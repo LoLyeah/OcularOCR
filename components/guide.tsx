@@ -966,8 +966,8 @@ export function Guide() {
                 <li>Ask natural language questions like <em>"What is the total invoice amount?"</em> or <em>"Summarize the contract terms."</em></li>
                 <li>Your queries and extracted document sections are sent securely to LLM endpoints to construct private answers.</li>
               </ul>
-              <p className="text-slate-500 text-[11px]">
-                For running the vault 100% offline or installing OcularOCR as a native application, view our <button onClick={() => setActiveArticleId('pwa')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">PWA Installation guide <ChevronRight className="h-3 w-3" /></button>.
+              <p className="text-slate-500 text-[11px] leading-relaxed">
+                For running the vault 100% offline or installing OcularOCR as a native application, view our <button onClick={() => setActiveArticleId('pwa')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">PWA Installation guide <ChevronRight className="h-3 w-3" /></button>. If you wish to configure local private AI for offline chat, summaries, and OCR, see our <button onClick={() => setActiveArticleId('ollama-offline')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">Offline AI: Ollama Setup guide <ChevronRight className="h-3 w-3" /></button>.
               </p>
             </div>
           </div>
@@ -1194,6 +1194,164 @@ export function Guide() {
               <ShieldCheck className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
               <div>
                 <span className="font-bold">Encrypted Tag Metadata:</span> Just like the document contents, all suggested tags are fully encrypted using AES-256-GCM before saving. Suggested tags never leak to third parties.
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'ollama-offline',
+      category: 'user_guide',
+      title: 'Offline AI: Ollama Setup',
+      icon: Terminal,
+      renderContent: () => (
+        <div className="space-y-6">
+          <div className="border-b border-slate-200 dark:border-slate-800 pb-5">
+            <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">GUIDE / LOCAL WORKLOADS</span>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Configuring Ollama for Offline AI</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+              Learn how to run open-weight Multimodal/Vision LLMs locally on your own machine for 100% offline document OCR, chat, and summarization.
+            </p>
+          </div>
+
+          <div className="space-y-6 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {/* Specs / Requirements */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1.5">
+                <Cpu className="h-4 w-4 text-indigo-500" />
+                Hardware Requirements for Vision VLMs
+              </h3>
+              <p className="mb-3">
+                Vision-Language Models (VLMs) process image patches alongside text, requiring significantly more memory and compute than text-only counterparts.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3 rounded border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block mb-1">For 7B - 12B Vision Models</span>
+                  <p className="text-[11px] mb-1">e.g., <strong>Qwen2.5-VL-7B</strong>, <strong>Llama-3.2-Vision (11B)</strong>, or <strong>Gemma 4 12B</strong>.</p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] mt-1.5 font-medium text-slate-500">
+                    <li><strong>Minimum:</strong> 16GB RAM/Unified Memory (Mac M1/M2/M3) or 12GB VRAM (NVIDIA RTX 3060/4060).</li>
+                    <li><strong>Recommended:</strong> 24GB Unified Memory / VRAM (Mac Studio, RTX 3090/4090) for sub-second visual inference.</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 rounded border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block mb-1">For 26B+ MoE / Dense Models</span>
+                  <p className="text-[11px] mb-1">e.g., <strong>Qwen3.6 27B</strong>, <strong>Gemma 4 26B A4B</strong>, or <strong>Llama 4 Maverick</strong>.</p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] mt-1.5 font-medium text-slate-500">
+                    <li><strong>Minimum:</strong> 32GB RAM/Unified Memory or 16GB VRAM (with aggressive quantization).</li>
+                    <li><strong>Recommended:</strong> 64GB Unified Memory (Apple Silicon) or dual GPUs (2x24GB VRAM) to prevent execution bottlenecks.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Install Step */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">1. Install Ollama</h3>
+              <p className="mb-2">
+                Download and install the native Ollama application for your platform:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-1 mb-3">
+                <li><strong>macOS & Windows:</strong> Download and run the setup from <a href="https://ollama.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline inline-flex items-center gap-0.5">ollama.com <ExternalLink className="h-3 w-3 inline" /></a>.</li>
+                <li>
+                  <strong>Linux:</strong> Install instantly via curl command:
+                  <pre className="mt-1.5 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    curl -fsSL https://ollama.com/install.sh | sh
+                  </pre>
+                </li>
+              </ul>
+            </div>
+
+            {/* Pull Vision Model */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">2. Pull a Vision Model</h3>
+              <p className="mb-2">
+                Open your terminal and pull a vision-capable VLM. The <strong>Qwen2.5-VL</strong> series is highly recommended as it excels at layout comprehension, multi-lingual OCR, and math formula transcription.
+              </p>
+              <div className="space-y-2 mt-2">
+                <div>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Option A: Qwen 2.5 VL 7B (Recommended for standard GPUs)</span>
+                  <pre className="bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    ollama run qwen2.5-vl:7b
+                  </pre>
+                </div>
+                <div>
+                  <span className="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Option B: Llama 3.2 Vision 11B (Highly responsive VLM)</span>
+                  <pre className="bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    ollama run llama3.2-vision
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* CORS Policy Step */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-1.5">
+                <HelpCircle className="h-4 w-4 text-indigo-500" />
+                3. Configure CORS (Cross-Origin Resource Sharing)
+              </h3>
+              <p className="mb-3">
+                Since OcularOCR operates directly inside your web browser (client-side), the browser will block requests to Ollama (<code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">http://localhost:11434</code>) unless you enable cross-origin permissions in Ollama.
+              </p>
+              
+              <div className="space-y-3.5 pl-2 border-l-2 border-slate-200 dark:border-slate-800">
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block">macOS Configuration</span>
+                  <p className="mt-0.5">1. Quit Ollama from the menu bar status icon.</p>
+                  <p className="mt-0.5">2. Open Terminal and set the environment variable:</p>
+                  <pre className="mt-1 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    launchctl setenv OLLAMA_ORIGINS "*"
+                  </pre>
+                  <p className="mt-1">3. Relaunch Ollama from your Applications folder.</p>
+                </div>
+
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block">Windows Configuration</span>
+                  <p className="mt-0.5">1. Quit Ollama from the system tray.</p>
+                  <p className="mt-0.5">2. Search for &ldquo;Environment Variables&rdquo; in Windows Search, and click <strong>Edit system environment variables</strong>.</p>
+                  <p className="mt-0.5">3. Add a new **User Variable** with Name <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">OLLAMA_ORIGINS</code> and Value <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">*</code>.</p>
+                  <p className="mt-0.5">4. Save and relaunch the Ollama app.</p>
+                </div>
+
+                <div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 block">Linux (systemd) Configuration</span>
+                  <p className="mt-0.5">1. Edit the service configuration:</p>
+                  <pre className="mt-1 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    sudo systemctl edit ollama.service
+                  </pre>
+                  <p className="mt-1">2. Add the environment variable under the <code className="bg-slate-900 px-1 rounded text-slate-300">[Service]</code> group:</p>
+                  <pre className="mt-1 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto">
+{`[Service]
+Environment="OLLAMA_ORIGINS=*"`}
+                  </pre>
+                  <p className="mt-1">3. Save the file, reload systemd, and restart the service:</p>
+                  <pre className="mt-1 bg-slate-950 text-slate-100 font-mono text-[10px] p-2 rounded overflow-x-auto select-all">
+                    sudo systemctl daemon-reload && sudo systemctl restart ollama
+                  </pre>
+                </div>
+              </div>
+            </div>
+
+            {/* OcularOCR Config Step */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-2">4. Connect OcularOCR to Ollama</h3>
+              <p className="mb-2.5">
+                Once Ollama is configured and running with your model, link it inside OcularOCR:
+              </p>
+              <ol className="list-decimal pl-5 space-y-1.5 mb-3 font-medium text-slate-500">
+                <li>Click the <strong>Settings</strong> button (gear icon) in the bottom-left corner of the sidebar.</li>
+                <li>Under <strong>AI Settings</strong>, select the **Ollama** provider.</li>
+                <li>Set the **Model Name** to match your local model name (e.g., <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">qwen2.5-vl:7b</code>).</li>
+                <li>Verify the **API Endpoint URL** is set to Ollama's local port: <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">http://localhost:11434/v1</code>.</li>
+                <li>Leave the **API Key** field blank, then click **Save Configurations**.</li>
+              </ol>
+
+              <div className="flex gap-2 items-start mt-2 p-2.5 rounded bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40 text-emerald-800 dark:text-emerald-300">
+                <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600" />
+                <div>
+                  <strong>Offline Success:</strong> You are now running document transcription and queries entirely locally. Zero telemetry, zero external network requests, and absolute zero-knowledge privacy.
+                </div>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Check, BrainCircuit, Palette, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { X, Check, BrainCircuit, Palette, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, getSettings, saveSettings, clearVault } from '@/lib/storage';
 import { encryptString, decryptString } from '@/lib/crypto';
 import { useToast } from './toast';
+import { useVersionCheck } from '@/hooks/use-version-check';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
@@ -11,7 +12,41 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
+  const {
+    currentVersion,
+    latestVersion,
+    updateAvailable,
+    isChecking: isCheckingVersion,
+    checkForUpdate,
+    performUpdate
+  } = useVersionCheck();
+
   const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'system-reset'>('ai');
+  
+  const handleManualCheck = async () => {
+    toast({
+      title: "Checking for updates",
+      description: "Fetching the latest version from server...",
+      variant: "info"
+    });
+    const result = await checkForUpdate();
+    if (result) {
+      if (result.available) {
+        toast({
+          title: "Update available!",
+          description: `Version v${result.version} is now available (current: v${currentVersion}).`,
+          variant: "success"
+        });
+      } else {
+        toast({
+          title: "Up to date",
+          description: `You are running the latest version (v${currentVersion}).`,
+          variant: "success"
+        });
+      }
+    }
+  };
+
   const [settings, setSettings] = useState<AISettings>({
     provider: 'gemini',
     apiKey: '',
@@ -560,6 +595,59 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col gap-4"
                   >
+                    {/* Version Control Section */}
+                    <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                            Application Update
+                          </h3>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                            Manage application versions. PWAs cache assets aggressively and may need a hard refresh to load updates.
+                          </p>
+                        </div>
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded-full font-mono text-slate-600 dark:text-slate-400 font-bold shrink-0">
+                          v{currentVersion}
+                        </span>
+                      </div>
+
+                      {updateAvailable ? (
+                        <div className="mt-1 border border-emerald-200 dark:border-emerald-950/60 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-lg p-3 flex flex-col gap-2">
+                          <div className="flex items-start gap-2">
+                            <ArrowDownToLine className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                                Update Available: v{latestVersion}
+                              </h4>
+                              <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 leading-relaxed mt-0.5">
+                                A newer version of OcularOCR is ready. Update now to refresh and apply the latest changes. Your local vault remains completely safe.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={performUpdate}
+                            className="w-full mt-1 rounded-md bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-3 py-2 text-xs font-bold text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+                          >
+                            <ArrowDownToLine className="h-3.5 w-3.5" />
+                            UPDATE AND HARD REFRESH
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            type="button"
+                            disabled={isCheckingVersion}
+                            onClick={handleManualCheck}
+                            className="w-full rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${isCheckingVersion ? 'animate-spin' : ''}`} />
+                            {isCheckingVersion ? 'Checking for updates...' : 'Check for Updates'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="border border-red-200 dark:border-red-950/60 bg-red-50/50 dark:bg-red-950/10 rounded p-4 flex flex-col gap-3">
                       <h3 className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
                         <AlertTriangle className="h-4.5 w-4.5" />

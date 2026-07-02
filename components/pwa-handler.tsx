@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Smartphone, ArrowDownToLine } from 'lucide-react';
+import { X, Smartphone, ArrowDownToLine, RefreshCw } from 'lucide-react';
+import { useVersionCheck } from '@/hooks/use-version-check';
 
 export function PwaHandler() {
+  const { currentVersion, latestVersion, updateAvailable, performUpdate } = useVersionCheck();
+  const [dismissedUpdate, setDismissedUpdate] = useState(false);
   const [deferredPrompt, setDeferredPromptState] = useState<any>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -102,50 +105,100 @@ export function PwaHandler() {
     localStorage.setItem('pwa_prompt_dismissed', 'true');
   };
 
-  if (!showPrompt || isInstalled) return null;
+  const showInstallBanner = showPrompt && !isInstalled;
+  const showUpdateBanner = updateAvailable && !dismissedUpdate;
+
+  if (!showInstallBanner && !showUpdateBanner) return null;
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, y: 50, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-        className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
-      >
-        <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-          <Smartphone className="h-5 w-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-            Install OcularOCR
-          </h4>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
-            Install on your desktop or phone to run fully offline with secure local databases and instant launch speeds.
-          </p>
-          <div className="mt-3 flex gap-2 text-[10px]">
-            <button
-              onClick={handleInstallClick}
-              className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
-            >
-              <ArrowDownToLine className="h-3 w-3" />
-              INSTALL NOW
-            </button>
-            <button
-              onClick={handleDismiss}
-              className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all cursor-pointer"
-            >
-              LATER
-            </button>
-          </div>
-        </div>
-        <button
-          onClick={handleDismiss}
-          className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+      {showInstallBanner && (
+        <motion.div
+          key="install-banner"
+          initial={{ opacity: 0, y: 50, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+          className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
         >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </motion.div>
+          <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <Smartphone className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              Install OcularOCR
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+              Install on your desktop or phone to run fully offline with secure local databases and instant launch speeds.
+            </p>
+            <div className="mt-3 flex gap-2 text-[10px]">
+              <button
+                onClick={handleInstallClick}
+                className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+              >
+                <ArrowDownToLine className="h-3 w-3" />
+                INSTALL NOW
+              </button>
+              <button
+                onClick={handleDismiss}
+                className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all cursor-pointer"
+              >
+                LATER
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={handleDismiss}
+            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </motion.div>
+      )}
+
+      {showUpdateBanner && (
+        <motion.div
+          key="update-banner"
+          initial={{ opacity: 0, y: 50, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+          className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
+        >
+          <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <RefreshCw className="h-5 w-5 animate-spin" style={{ animationDuration: '3s' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              Update Available (v{latestVersion})
+            </h4>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+              A new version of OcularOCR is ready to use. Your vault and settings will remain safe.
+            </p>
+            <div className="mt-3 flex gap-2 text-[10px]">
+              <button
+                onClick={performUpdate}
+                className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"
+              >
+                <ArrowDownToLine className="h-3 w-3" />
+                UPDATE NOW
+              </button>
+              <button
+                onClick={() => setDismissedUpdate(true)}
+                className="px-2.5 py-1.5 rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold transition-all cursor-pointer"
+              >
+                LATER
+              </button>
+            </div>
+          </div>
+          <button
+            onClick={() => setDismissedUpdate(true)}
+            className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
 }

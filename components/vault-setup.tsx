@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { deriveKey, encryptString, decryptString } from '@/lib/crypto';
+import { 
+  deriveKey, 
+  encryptString, 
+  decryptString,
+  isWebAuthnPrfSupported,
+  registerPasskeyPrf,
+  getPasskeyPrf,
+  deriveKeyFromPrf
+} from '@/lib/crypto';
 import { getSalt, clearVault, getVerificationToken, setVerificationToken } from '@/lib/storage';
-import { Lock, Unlock, AlertTriangle, ShieldCheck, ShieldOff, Loader2 } from 'lucide-react';
+import { Lock, Unlock, AlertTriangle, ShieldCheck, ShieldOff, Loader2, Fingerprint } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface VaultSetupProps {
@@ -15,10 +23,15 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showResetWarning, setShowResetWarning] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [setupStep, setSetupStep] = useState<'choose_mode' | 'set_password' | null>(null);
+  const [setupStep, setSetupStep] = useState<'choose_mode' | 'set_password' | 'unlock_passkey' | null>(null);
+  const [isPrfAvailable, setIsPrfAvailable] = useState(false);
 
   useEffect(() => {
     async function checkVault() {
+      // Check PRF capability
+      const supported = await isWebAuthnPrfSupported();
+      setIsPrfAvailable(supported);
+
       const verifyToken = await getVerificationToken();
       if (!verifyToken) {
         setSetupStep('choose_mode');
@@ -34,12 +47,46 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
            } catch(err) {
              console.error('Failed to auto unlock', err);
            }
+        } else if (mode === 'passkey') {
+           setSetupStep('unlock_passkey');
+           setIsChecking(false);
+           return;
         }
         setIsChecking(false);
       }
     }
     checkVault();
   }, [onUnlock]);
+
+  useEffect(() => {
+    if (setupStep === 'unlock_passkey') {
+      // Safe auto-prompt for biometrics when screen loads
+      const autoPrompt = async () => {
+        try {
+          const credentialId = localStorage.getItem('vault_passkey_credential_id');
+          if (!credentialId) return;
+          
+          setIsLoading(true);
+          const salt = await getSalt();
+          const prfValue = await getPasskeyPrf(credentialId, salt);
+          const key = await deriveKeyFromPrf(prfValue);
+          const verifyToken = await getVerificationToken();
+          if (verifyToken) {
+            const decrypted = await decryptString(verifyToken.data, verifyToken.iv, key);
+            if (decrypted === 'VAULT_VALID') {
+              onUnlock(key);
+              return;
+            }
+          }
+        } catch (err) {
+          console.log('Auto-prompt bypassed (requires user interaction):', err);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      autoPrompt();
+    }
+  }, [setupStep, onUnlock]);
 
   const handleSetupUnencrypted = async () => {
     setIsLoading(true);
@@ -52,6 +99,57 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
       onUnlock(key);
     } catch(err) {
       setError('Failed to setup unencrypted vault.');
+      setIsLoading(false);
+    }
+  };
+
+  const handleSetupPasskey = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const salt = await getSalt();
+      const { prfValue, credentialId } = await registerPasskeyPrf('Local OcularOCR User', salt);
+      const key = await deriveKeyFromPrf(prfValue);
+      const { encrypted, iv } = await encryptString('VAULT_VALID', key);
+      await setVerificationToken(encrypted, iv);
+      localStorage.setItem('vault_mode', 'passkey');
+      localStorage.setItem('vault_passkey_credential_id', credentialId);
+      onUnlock(key);
+    } catch(err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to setup passkey vault.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUnlockPasskey = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const credentialId = localStorage.getItem('vault_passkey_credential_id');
+      if (!credentialId) {
+        throw new Error('No passkey credential ID found. Please reset the vault.');
+      }
+      const salt = await getSalt();
+      const prfValue = await getPasskeyPrf(credentialId, salt);
+      const key = await deriveKeyFromPrf(prfValue);
+      
+      const verifyToken = await getVerificationToken();
+      if (!verifyToken) {
+        throw new Error('Vault verification token is missing.');
+      }
+      
+      const decrypted = await decryptString(verifyToken.data, verifyToken.iv, key);
+      if (decrypted === 'VAULT_VALID') {
+        onUnlock(key);
+      } else {
+        setError('Passkey did not decrypt vault correctly.');
+      }
+    } catch(err: any) {
+      console.error(err);
+      setError(err?.message || 'Failed to unlock vault with passkey.');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -99,6 +197,7 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
   const handleResetVault = async () => {
     await clearVault();
     localStorage.removeItem('vault_mode');
+    localStorage.removeItem('vault_passkey_credential_id');
     window.location.reload();
   };
 
@@ -168,13 +267,27 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
                 Choose how you want to secure your local document vault. This determines how your data will be encrypted on this device.
               </p>
               <div className="flex w-full flex-col gap-3">
+                {isPrfAvailable && (
+                  <button
+                    onClick={handleSetupPasskey}
+                    disabled={isLoading}
+                    className="flex flex-col items-start rounded border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-900/20 p-4 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors text-left disabled:opacity-50 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Fingerprint className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />
+                      <span className="font-bold text-sm text-emerald-900 dark:text-emerald-300">Passkey / Biometric Vault (Beta)</span>
+                    </div>
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400/80 leading-relaxed">Secure your vault with Touch ID, Face ID, or Windows Hello. Fast passwordless access.</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => setSetupStep('set_password')}
                   className="flex flex-col items-start rounded border border-indigo-200 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-900/20 p-4 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors text-left cursor-pointer"
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <Lock className="h-4 w-4 text-indigo-700 dark:text-indigo-400" />
-                    <span className="font-bold text-sm text-indigo-900 dark:text-indigo-300">Encrypted Vault (Recommended)</span>
+                    <span className="font-bold text-sm text-indigo-900 dark:text-indigo-300">Encrypted Vault (Password)</span>
                   </div>
                   <span className="text-xs text-indigo-700 dark:text-indigo-400/80 leading-relaxed">Secure all documents and AI settings with a password. Requires password on every visit.</span>
                 </button>
@@ -193,6 +306,55 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
               </div>
               {error && <p className="mt-4 text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
             </motion.div>
+          ) : setupStep === 'unlock_passkey' ? (
+            <motion.div
+              key="unlock-passkey"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className="mb-4">
+                <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
+              </div>
+              <h1 className="text-lg font-bold">Biometric Unlock</h1>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed mb-6 font-medium">
+                Your vault is secured with a Passkey. Click below or scan to unlock.
+              </p>
+
+              <button
+                onClick={handleUnlockPasskey}
+                disabled={isLoading}
+                className="flex flex-col items-center justify-center rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/50 p-6 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors w-24 h-24 mb-6 disabled:opacity-50 cursor-pointer focus:outline-none shadow-sm"
+                aria-label="Scan Passkey"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-10 w-10 animate-spin text-indigo-600 dark:text-indigo-400" />
+                ) : (
+                  <Fingerprint className="h-10 w-10 text-indigo-600 dark:text-indigo-400" />
+                )}
+              </button>
+
+              {error && <p className="text-xs font-medium text-red-500 dark:text-red-400 mb-4">{error}</p>}
+
+              <button
+                onClick={handleUnlockPasskey}
+                disabled={isLoading}
+                className="rounded bg-indigo-600 px-6 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-sm cursor-pointer"
+              >
+                {isLoading ? 'Unlocking...' : 'UNLOCK WITH PASSKEY'}
+              </button>
+
+              <div className="mt-8 flex justify-center">
+                <button 
+                  onClick={() => setShowResetWarning(true)}
+                  className="text-xs font-medium text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                >
+                  Forgot Key? Reset Vault
+                </button>
+              </div>
+            </motion.div>
           ) : (
             <motion.div
               key="set-password"
@@ -206,7 +368,7 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
                   <Image src="/icon.svg" width={48} height={48} className="rounded-xl shadow-sm select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
                 </div>
                 <h1 className="text-lg font-bold">Secure Local Vault</h1>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
                   Enter your vault password. If this is your first time, this password will be used to encrypt all your data locally.
                 </p>
               </div>

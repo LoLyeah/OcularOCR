@@ -68,3 +68,145 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
   }
   return bytes.buffer;
 }
+
+export async function isWebAuthnPrfSupported(): Promise<boolean> {
+  if (typeof window === 'undefined' || !window.PublicKeyCredential) return false;
+  try {
+    const caps = await PublicKeyCredential.getClientCapabilities?.();
+    return !!caps?.prf;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function registerPasskeyPrf(username: string, salt: Uint8Array): Promise<{ prfValue: ArrayBuffer; credentialId: string }> {
+  if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+    throw new Error('WebAuthn is not supported in this environment.');
+  }
+
+  const rpId = window.location.hostname;
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const userId = crypto.getRandomValues(new Uint8Array(16));
+
+  const options: CredentialCreationOptions = {
+    publicKey: {
+      challenge,
+      rp: {
+        name: 'OcularOCR Local Vault',
+        id: rpId
+      },
+      user: {
+        id: userId,
+        name: username || 'local-user',
+        displayName: username || 'Local User'
+      },
+      pubKeyCredParams: [
+        { type: 'public-key', alg: -7 },  // ES256
+        { type: 'public-key', alg: -257 } // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'required',
+        residentKey: 'required',
+        requireResidentKey: true
+      },
+      extensions: {
+        prf: {
+          eval: {
+            first: salt
+          }
+        }
+      } as any
+    }
+  };
+
+  const credential = await navigator.credentials.create(options) as PublicKeyCredential;
+  if (!credential) {
+    throw new Error('Credential creation failed.');
+  }
+
+  const extensionResults = credential.getClientExtensionResults() as any;
+  const prfResults = extensionResults.prf?.results;
+  const firstPrf = prfResults?.first;
+
+  if (!firstPrf) {
+    throw new Error('Your security device or browser did not return a PRF encryption key. Please ensure platform biometrics are enabled.');
+  }
+
+  const credentialId = arrayBufferToBase64(credential.rawId);
+
+  return {
+    prfValue: firstPrf,
+    credentialId
+  };
+}
+
+export async function getPasskeyPrf(credentialIdBase64: string, salt: Uint8Array): Promise<ArrayBuffer> {
+  if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+    throw new Error('WebAuthn is not supported in this environment.');
+  }
+
+  const rpId = window.location.hostname;
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const credentialId = base64ToArrayBuffer(credentialIdBase64);
+
+  const options: CredentialRequestOptions = {
+    publicKey: {
+      challenge,
+      rpId,
+      allowCredentials: [
+        {
+          type: 'public-key',
+          id: credentialId
+        }
+      ],
+      userVerification: 'required',
+      extensions: {
+        prf: {
+          eval: {
+            first: salt
+          }
+        }
+      } as any
+    }
+  };
+
+  const assertion = await navigator.credentials.get(options) as PublicKeyCredential;
+  if (!assertion) {
+    throw new Error('Credential assertion failed.');
+  }
+
+  const extensionResults = assertion.getClientExtensionResults() as any;
+  const prfResults = extensionResults.prf?.results;
+  const firstPrf = prfResults?.first;
+
+  if (!firstPrf) {
+    throw new Error('Failed to retrieve encryption key from security device (WebAuthn PRF extension).');
+  }
+
+  return firstPrf;
+}
+
+export async function deriveKeyFromPrf(prfValue: ArrayBuffer): Promise<CryptoKey> {
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    prfValue,
+    { name: 'HKDF' },
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new Uint8Array(),
+      info: new TextEncoder().encode('OcularOCR-Vault-PRF-Key')
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+

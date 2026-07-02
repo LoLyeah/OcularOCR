@@ -90,4 +90,9 @@ export async function clearVault(): Promise<void> {
       await del(k);
     }
   }
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('vault_mode');
+    localStorage.removeItem('vault_passkey_credential_id');
+  }
 }
+

@@ -487,7 +487,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 bg-slate-50 dark:bg-slate-850 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
+                    <div className="grid grid-cols-1 gap-3 bg-slate-50/50 dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200/60 dark:border-slate-800">
                       <div>
                         <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('modelNameLabel')}</label>
                         <input

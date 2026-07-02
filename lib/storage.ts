@@ -1,4 +1,6 @@
 import { get, set, keys, del } from 'idb-keyval';
+import { arrayBufferToBase64, base64ToArrayBuffer } from './crypto';
+
 
 export interface DocumentEntry {
   id: string;
@@ -93,6 +95,145 @@ export async function clearVault(): Promise<void> {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('vault_mode');
     localStorage.removeItem('vault_passkey_credential_id');
+    localStorage.removeItem('vault_passkey_wrapped_key');
   }
 }
+
+function uint8ArrayToArrayBuffer(arr: Uint8Array): ArrayBuffer {
+  if (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength) {
+    return arr.buffer as ArrayBuffer;
+  }
+  return arr.buffer.slice(arr.byteOffset, arr.byteOffset + arr.byteLength) as ArrayBuffer;
+}
+
+export interface EncryptedVaultBackup {
+  salt: string;
+  verifyToken?: {
+    data: string;
+    iv: string;
+  };
+  settings?: {
+    data: string;
+    iv: string;
+  };
+  documents: Array<{
+    id: string;
+    name: string;
+    type: string;
+    createdAt: number;
+    iv: string;
+    encryptedData: string;
+    ocrTextIv?: string;
+    encryptedOcrText?: string;
+    summaryIv?: string;
+    encryptedSummary?: string;
+    encryptedTags?: string;
+    tagsIv?: string;
+  }>;
+}
+
+export async function exportVaultEncrypted(): Promise<string> {
+  const salt = await getSalt();
+  const verifyToken = await getVerificationToken();
+  const settings = await getSettings();
+  const documents = await listDocuments();
+
+  const backup: EncryptedVaultBackup = {
+    salt: arrayBufferToBase64(uint8ArrayToArrayBuffer(salt)),
+    documents: documents.map((doc) => {
+      const docBackup: any = {
+        id: doc.id,
+        name: doc.name,
+        type: doc.type,
+        createdAt: doc.createdAt,
+        iv: arrayBufferToBase64(uint8ArrayToArrayBuffer(doc.iv)),
+        encryptedData: arrayBufferToBase64(doc.encryptedData)
+      };
+      if (doc.ocrTextIv && doc.encryptedOcrText) {
+        docBackup.ocrTextIv = arrayBufferToBase64(uint8ArrayToArrayBuffer(doc.ocrTextIv));
+        docBackup.encryptedOcrText = arrayBufferToBase64(doc.encryptedOcrText);
+      }
+      if (doc.summaryIv && doc.encryptedSummary) {
+        docBackup.summaryIv = arrayBufferToBase64(uint8ArrayToArrayBuffer(doc.summaryIv));
+        docBackup.encryptedSummary = arrayBufferToBase64(doc.encryptedSummary);
+      }
+      if (doc.tagsIv && doc.encryptedTags) {
+        docBackup.tagsIv = arrayBufferToBase64(uint8ArrayToArrayBuffer(doc.tagsIv));
+        docBackup.encryptedTags = arrayBufferToBase64(doc.encryptedTags);
+      }
+      return docBackup;
+    })
+  };
+
+  if (verifyToken) {
+    backup.verifyToken = {
+      data: arrayBufferToBase64(verifyToken.data),
+      iv: arrayBufferToBase64(uint8ArrayToArrayBuffer(verifyToken.iv))
+    };
+  }
+
+  if (settings) {
+    backup.settings = {
+      data: arrayBufferToBase64(settings.data),
+      iv: arrayBufferToBase64(uint8ArrayToArrayBuffer(settings.iv))
+    };
+  }
+
+  return JSON.stringify(backup, null, 2);
+}
+
+export async function importVaultEncrypted(backupJsonStr: string): Promise<void> {
+  const backup = JSON.parse(backupJsonStr) as EncryptedVaultBackup;
+  if (!backup.salt || !backup.documents) {
+    throw new Error('Invalid backup format.');
+  }
+
+  await clearVault();
+
+  const saltBuffer = base64ToArrayBuffer(backup.salt);
+  await set(STORAGE_KEY_SALT, new Uint8Array(saltBuffer));
+
+  if (backup.verifyToken) {
+    await set(STORAGE_KEY_VERIFY, {
+      data: base64ToArrayBuffer(backup.verifyToken.data),
+      iv: new Uint8Array(base64ToArrayBuffer(backup.verifyToken.iv))
+    });
+  }
+
+  if (backup.settings) {
+    await set(STORAGE_KEY_SETTINGS, {
+      data: base64ToArrayBuffer(backup.settings.data),
+      iv: new Uint8Array(base64ToArrayBuffer(backup.settings.iv))
+    });
+  }
+
+  for (const doc of backup.documents) {
+    const docEntry: DocumentEntry = {
+      id: doc.id,
+      name: doc.name,
+      type: doc.type,
+      createdAt: doc.createdAt,
+      iv: new Uint8Array(base64ToArrayBuffer(doc.iv)),
+      encryptedData: base64ToArrayBuffer(doc.encryptedData)
+    };
+    if (doc.ocrTextIv && doc.encryptedOcrText) {
+      docEntry.ocrTextIv = new Uint8Array(base64ToArrayBuffer(doc.ocrTextIv));
+      docEntry.encryptedOcrText = base64ToArrayBuffer(doc.encryptedOcrText);
+    }
+    if (doc.summaryIv && doc.encryptedSummary) {
+      docEntry.summaryIv = new Uint8Array(base64ToArrayBuffer(doc.summaryIv));
+      docEntry.encryptedSummary = base64ToArrayBuffer(doc.encryptedSummary);
+    }
+    if (doc.tagsIv && doc.encryptedTags) {
+      docEntry.tagsIv = new Uint8Array(base64ToArrayBuffer(doc.tagsIv));
+      docEntry.encryptedTags = base64ToArrayBuffer(doc.encryptedTags);
+    }
+    await saveDocument(docEntry);
+  }
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vault_mode', 'encrypted');
+  }
+}
+
 

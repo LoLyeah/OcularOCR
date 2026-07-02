@@ -219,3 +219,27 @@ export async function deriveKeyFromPrf(prfValue: ArrayBuffer): Promise<CryptoKey
   );
 }
 
+export async function wrapMasterKey(masterKey: CryptoKey, wrappingKey: CryptoKey): Promise<{ wrapped: ArrayBuffer; iv: Uint8Array }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = await crypto.subtle.wrapKey(
+    'raw',
+    masterKey,
+    wrappingKey,
+    { name: 'AES-GCM', iv: iv as unknown as BufferSource }
+  );
+  return { wrapped, iv };
+}
+
+export async function unwrapMasterKey(wrappedData: ArrayBuffer, unwrappingKey: CryptoKey, iv: Uint8Array): Promise<CryptoKey> {
+  return await crypto.subtle.unwrapKey(
+    'raw',
+    wrappedData,
+    unwrappingKey,
+    { name: 'AES-GCM', iv: iv as unknown as BufferSource },
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+

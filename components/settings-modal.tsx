@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { X, Check, BrainCircuit, Palette, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Check, BrainCircuit, Palette, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AISettings, getSettings, saveSettings, clearVault } from '@/lib/storage';
-import { encryptString, decryptString } from '@/lib/crypto';
+import { AISettings, getSettings, saveSettings, clearVault, exportVaultEncrypted, importVaultEncrypted, getSalt } from '@/lib/storage';
+import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPrf, wrapMasterKey, arrayBufferToBase64, deriveKeyFromPrf } from '@/lib/crypto';
 import { useToast } from './toast';
 import { useVersionCheck } from '@/hooks/use-version-check';
 
@@ -22,6 +22,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   } = useVersionCheck();
 
   const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'system-reset'>('ai');
+
   
   const handleManualCheck = async () => {
     toast({
@@ -80,8 +81,21 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const [isPrfSupported, setIsPrfSupported] = useState(false);
+  const [hasPasskey, setHasPasskey] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     async function load() {
+      // Check PRF and Passkey status
+      const prfSupported = await isWebAuthnPrfSupported();
+      setIsPrfSupported(prfSupported);
+      const wrappedKey = localStorage.getItem('vault_passkey_wrapped_key');
+      setHasPasskey(!!wrappedKey);
+
       // Load Theme settings
       const storedTheme = localStorage.getItem('vault_theme');
       const currentTheme = (storedTheme === 'light' || storedTheme === 'dark') ? storedTheme : 'system';
@@ -186,6 +200,115 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     document.documentElement.classList.add(`font-size-${initialFontSize}`);
 
     onClose();
+  };
+
+  const handleRegisterPasskey = async () => {
+    setIsPasskeyLoading(true);
+    try {
+      const salt = await getSalt();
+      const { prfValue, credentialId } = await registerPasskeyPrf('Local OcularOCR User', salt);
+      const wrappingKey = await deriveKeyFromPrf(prfValue);
+      const { wrapped, iv } = await wrapMasterKey(cryptoKey, wrappingKey);
+      
+      localStorage.setItem('vault_passkey_wrapped_key', arrayBufferToBase64(wrapped));
+      localStorage.setItem('vault_passkey_wrapped_iv', arrayBufferToBase64(iv.buffer as ArrayBuffer));
+      localStorage.setItem('vault_passkey_credential_id', credentialId);
+      localStorage.setItem('vault_mode', 'passkey');
+      
+      setHasPasskey(true);
+      toast({
+        title: "Passkey Linked Successfully",
+        description: "You can now unlock your vault using biometrics (Touch ID / Face ID) or your master password.",
+        variant: "success"
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Passkey Registration Failed",
+        description: err?.message || "Ensure your device supports biometrics and try again.",
+        variant: "error"
+      });
+    } finally {
+      setIsPasskeyLoading(false);
+    }
+  };
+
+  const handleRemovePasskey = () => {
+    localStorage.removeItem('vault_passkey_wrapped_key');
+    localStorage.removeItem('vault_passkey_wrapped_iv');
+    localStorage.removeItem('vault_passkey_credential_id');
+    localStorage.setItem('vault_mode', 'encrypted');
+    setHasPasskey(false);
+    toast({
+      title: "Passkey Unlinked",
+      description: "Biometric unlock disabled. You can still unlock using your master password.",
+      variant: "info"
+    });
+  };
+
+  const handleExportBackup = async () => {
+    setIsExporting(true);
+    try {
+      const jsonStr = await exportVaultEncrypted();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ocularocr-vault-backup-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({
+        title: "Vault Backup Exported",
+        description: "Your local-encrypted backup file has been saved to your downloads.",
+        variant: "success"
+      });
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Export Failed",
+        description: err?.message || "Failed to generate backup file.",
+        variant: "error"
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      if (!parsed.salt || !parsed.documents) {
+        throw new Error('File does not match the OcularOCR backup format.');
+      }
+      
+      await importVaultEncrypted(text);
+      toast({
+        title: "Vault Imported",
+        description: "Your encrypted backup was loaded. Reloading page to prompt for unlock password...",
+        variant: "success"
+      });
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      toast({
+        title: "Import Failed",
+        description: err?.message || "Failed to import backup. Please ensure the file is a valid OcularOCR backup JSON.",
+        variant: "error"
+      });
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -319,7 +442,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             }`}
           >
             <ShieldAlert className="h-4 w-4 shrink-0" />
-            System & Reset
+            System & Security
           </button>
         </div>
 
@@ -328,7 +451,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-sm font-bold">
               {activeTab === 'ai' ? 'AI Processing Configuration' : 
-               activeTab === 'appearance' ? 'Appearance Settings' : 'System & Reset'}
+               activeTab === 'appearance' ? 'Appearance Settings' : 'System, Security & Backup'}
             </h2>
             <button onClick={handleCancel} className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer">
               <X className="h-4 w-4" />
@@ -595,6 +718,123 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col gap-4"
                   >
+                    {/* Passkey Biometric Section */}
+                    <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                          <Fingerprint className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+                          Biometric Unlock (Beta)
+                        </h3>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                          Link a Passkey (Touch ID, Face ID, or Windows Hello) to this vault. This creates a secondary secure key that decrypts your master key on this device.
+                        </p>
+                      </div>
+
+                      {!isPrfSupported ? (
+                        <div className="rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-2.5 text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                          Biometrics are unavailable. Ensure you are using a modern browser, your context is secure (HTTPS/localhost), and your device supports biometrics.
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2 mt-1">
+                          {hasPasskey ? (
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/20 dark:bg-indigo-950/10">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span className="text-xs font-semibold text-indigo-900 dark:text-indigo-300">Biometric Unlock Linked</span>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={isPasskeyLoading}
+                                onClick={handleRemovePasskey}
+                                className="rounded bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                              >
+                                Disable Biometrics
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={isPasskeyLoading}
+                              onClick={handleRegisterPasskey}
+                              className="w-full rounded bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white px-3 py-2 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-sm"
+                            >
+                              {isPasskeyLoading ? (
+                                <>
+                                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                  Registering Biometrics...
+                                </>
+                              ) : (
+                                <>
+                                  <Fingerprint className="h-3.5 w-3.5" />
+                                  Link Touch ID / Face ID
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Backup & Import Section */}
+                    <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                          <Download className="h-4.5 w-4.5 text-indigo-600 dark:text-indigo-400" />
+                          Vault Backup & Import
+                        </h3>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                          Export your encrypted local database to back up your data or move it to a different browser/device. Backups remain fully encrypted.
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                        <button
+                          type="button"
+                          disabled={isExporting}
+                          onClick={handleExportBackup}
+                          className="rounded border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 text-indigo-700 dark:text-indigo-300 px-3 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isExporting ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Exporting...
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5" />
+                              Export Encrypted Backup
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isImporting}
+                          onClick={() => fileInputRef.current?.click()}
+                          className="rounded border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 px-3 py-2.5 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          {isImporting ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                              Importing...
+                            </>
+                          ) : (
+                            <>
+                              <FileUp className="h-3.5 w-3.5" />
+                              Import Encrypted Backup
+                            </>
+                          )}
+                        </button>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".json"
+                          className="hidden"
+                          onChange={handleImportBackup}
+                        />
+                      </div>
+                    </div>
+
                     {/* Version Control Section */}
                     <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
                       <div className="flex justify-between items-start">

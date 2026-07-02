@@ -68,6 +68,12 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const { toast } = useToast();
 
   useEffect(() => {
+    if (isMobile) {
+      setIsCollapsed(true);
+    }
+  }, [isMobile]);
+
+  useEffect(() => {
     let objectUrl: string;
     
     async function loadData() {
@@ -422,22 +428,22 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       className="absolute inset-0 flex flex-col bg-[#F1F5F9] dark:bg-slate-950 font-sans"
     >
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 z-10">
-        <div className="flex items-center gap-4">
+      <header className="flex flex-col sm:flex-row sm:h-12 shrink-0 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2 sm:py-0 z-10 gap-2">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
           <button
             onClick={onClose}
             aria-label="Go back to files"
-            className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
+            className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer shrink-0"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate max-w-[200px] sm:max-w-xs">{doc.name}</h2>
+          <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate flex-1 sm:max-w-xs">{doc.name}</h2>
         </div>
         
-        <div className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 p-0.5 relative">
+        <div className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800 p-0.5 relative w-full sm:w-auto">
           <button
             onClick={() => setActiveTab('preview')}
-            className={`relative flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+            className={`relative flex-1 sm:flex-none justify-center flex items-center gap-1.5 rounded px-3 py-1.5 sm:py-1 text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'preview' ? 'text-slate-800 dark:text-slate-100 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -455,7 +461,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           </button>
           <button
             onClick={() => setActiveTab('ocr')}
-            className={`relative flex items-center gap-1.5 rounded px-3 py-1 text-xs font-medium transition-colors cursor-pointer ${
+            className={`relative flex-1 sm:flex-none justify-center flex items-center gap-1.5 rounded px-3 py-1.5 sm:py-1 text-xs font-medium transition-colors cursor-pointer ${
               activeTab === 'ocr' ? 'text-slate-800 dark:text-slate-100 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
             }`}
           >
@@ -640,7 +646,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           {/* Header Bar Toggle */}
           <div 
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="flex h-11 items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors select-none shrink-0"
+            className={`flex h-11 items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors select-none shrink-0 ${
+              isCollapsed ? 'lg:hidden' : ''
+            }`}
           >
             <div className="flex items-center gap-2">
               <Brain className="h-4 w-4 text-indigo-500" />
@@ -775,7 +783,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
               AI Assistant
             </div>
             
-            <div className="flex-1 overflow-visible lg:overflow-y-auto p-4">
+            <div className="flex-1 overflow-visible lg:overflow-y-auto p-4 custom-scrollbar">
               {!ocrText ? (
                 <div className="flex flex-col items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 min-h-[120px] lg:h-full">
                   <p>Run OCR first to extract text before using AI analysis.</p>

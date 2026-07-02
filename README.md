@@ -33,6 +33,9 @@ Traditional OCR tools require uploading your sensitive documents (invoices, tax 
     *   **Local Heuristics**: Lightweight rule-based tag matching on filename and document contents (Invoices, Receipts, Contracts, Passports, Statements, Manuals, Medical docs, etc.).
     *   **AI Auto-Tagging**: Uses structured JSON classification schema via configured LLMs.
 *   **📝 Document Summarization**: Automatically generates structured markdown summaries and key extraction points from your documents.
+*   **🎛️ Advanced AI settings**: Adjust generation temperature, set custom system prompts for OCR extraction or summarization, and choose your tag extraction strategies.
+*   **🎨 Appearance Customization**: Native support for dark/light themes and customizable font sizing (small, medium, large) optimized for document reading.
+*   **🚨 Self-Destruct Reset Mechanism**: One-click vault wipe option in settings to securely erase all IndexedDB collections, cryptographic salts, credentials, and cookies.
 *   **📱 Progressive Web App (PWA)**: Install OcularOCR to your desktop or mobile home screen to run completely offline with offline databases and instant launch speeds.
 *   **📁 Smart Document Manager**: Search, filter, tag, and view your documents securely inside a unified, responsive dashboard.
 

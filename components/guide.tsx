@@ -852,12 +852,15 @@ export function Guide() {
               <p className="mb-2">
                 When you launch the app, you will be prompted to create or enter a master passphrase. This passphrase is the master key for your locally encrypted storage.
               </p>
-              <div className="flex gap-2 items-start mt-2 p-2.5 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-amber-800 dark:text-amber-300">
+              <div className="flex gap-2 items-start mt-2 p-2.5 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 mb-3">
                 <Lock className="h-4 w-4 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">Important Security Note:</span> We use <code className="bg-amber-100/50 dark:bg-amber-900/50 px-1 py-0.5 rounded">PBKDF2</code> derivation to generate your encryption keys entirely in the browser. <strong>We do not save your password on any server.</strong> If you lose your passphrase, your stored documents cannot be recovered.
                 </div>
               </div>
+              <p className="text-slate-500 text-[11px]">
+                For details on key derivation rounds and zero-knowledge paradigms, view our <button onClick={() => setActiveArticleId('security')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">Security Architecture guide <ChevronRight className="h-3 w-3" /></button>.
+              </p>
             </div>
 
             {/* Step 2 */}
@@ -869,43 +872,103 @@ export function Guide() {
               <p className="mb-2">
                 Once inside the dashboard, use the file manager to import PDF files:
               </p>
-              <ul className="list-disc pl-5 space-y-1 mt-1">
+              <ul className="list-disc pl-5 space-y-1 mt-1 mb-3">
                 <li>Drag and drop files directly onto the dropzone or click the file upload panel.</li>
                 <li>Your files are automatically encrypted with AES-GCM before being stored in IndexedDB.</li>
                 <li>Assign tags manually to organize invoices, IDs, or receipts for fast retrieval.</li>
               </ul>
+              <p className="text-slate-500 text-[11px]">
+                To learn about file upload sizes, tag classification, and bulk document exporting, refer to the <button onClick={() => setActiveArticleId('usage')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">Managing Documents guide <ChevronRight className="h-3 w-3" /></button>.
+              </p>
             </div>
 
             {/* Step 3 */}
             <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
               <div className="flex items-center gap-2.5 mb-2.5">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">3</span>
-                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Extract Text with OCR</h3>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Configure API Keys (Optional but Recommended)</h3>
               </div>
-              <p className="mb-2">
-                To enable search and chat, you need to extract the text content from your documents:
+              <p className="mb-3">
+                To unlock advanced features like AI-powered OCR, Auto-Tagging, and Document Chat, you can add your personal API keys in the <strong>Settings</strong> panel (accessible via the gear icon in the bottom-left sidebar):
               </p>
-              <ul className="list-disc pl-5 space-y-1 mt-1">
-                <li>Click the document row to open the Document Viewer.</li>
-                <li>Click <span className="font-semibold text-indigo-600">Extract Text via OCR</span> to run local text extraction using Tesseract.js.</li>
-                <li>For handwritten or complex layouts, open the <span className="font-semibold text-indigo-600">Settings</span> panel to toggle <span className="font-semibold text-indigo-600">Use LLM for OCR</span> using state-of-the-art vision models.</li>
-              </ul>
+              
+              <div className="space-y-3.5 pl-2 border-l-2 border-indigo-100 dark:border-indigo-950 mb-3">
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    Google Gemini API <span className="text-[9px] bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 px-1 py-0.5 rounded uppercase">Free Tier Available</span>
+                  </h4>
+                  <p className="mt-0.5 text-slate-500">
+                    1. Go to <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-medium">Google AI Studio <ExternalLink className="h-3 w-3 inline" /></a> and generate an API key.
+                  </p>
+                  <p className="mt-0.5 text-slate-500">
+                    2. In OcularOCR Settings, select <strong>Google</strong> as the provider and paste the key in the <strong>API Key</strong> box.
+                  </p>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    OpenAI or Groq Cloud API
+                  </h4>
+                  <p className="mt-0.5 text-slate-500">
+                    1. Create a key at the <a href="https://platform.openai.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-medium">OpenAI Platform <ExternalLink className="h-3 w-3 inline" /></a> or <a href="https://console.groq.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 font-medium">Groq Console <ExternalLink className="h-3 w-3 inline" /></a>.
+                  </p>
+                  <p className="mt-0.5 text-slate-500">
+                    2. In Settings, choose the <strong>OpenAI</strong> provider and paste your key (starting with <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">sk-</code> or <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">gsk_</code>) in the <strong>API Key</strong> box.
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    * <em>Note:</em> For Groq, you must also change the <strong>API Endpoint URL</strong> to <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-[10px]">https://api.groq.com/openai/v1/chat/completions</code>.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 items-start p-2.5 rounded bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/40 text-indigo-800 dark:text-indigo-300 mb-3">
+                <ShieldCheck className="h-4 w-4 shrink-0 mt-0.5 text-emerald-500" />
+                <div>
+                  All API keys are encrypted client-side using your master passphrase before saving to IndexedDB. They are never transmitted in plain text.
+                </div>
+              </div>
+
+              <p className="text-slate-500 text-[11px]">
+                For more details on endpoint configurations and custom models, refer to our in-depth <button onClick={() => setActiveArticleId('api')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">LLM & API Integrations guide <ChevronRight className="h-3 w-3" /></button>.
+              </p>
             </div>
 
             {/* Step 4 */}
             <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
               <div className="flex items-center gap-2.5 mb-2.5">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">4</span>
+                <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Extract Text with OCR</h3>
+              </div>
+              <p className="mb-2">
+                To enable search and chat, you need to extract the text content from your documents:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 mt-1 mb-3">
+                <li>Click the document row to open the Document Viewer.</li>
+                <li>Click <span className="font-semibold text-indigo-600">Extract Text via OCR</span> to run local text extraction using Tesseract.js.</li>
+                <li>For handwritten or complex layouts, open the <span className="font-semibold text-indigo-600">Settings</span> panel to toggle <span className="font-semibold text-indigo-600">Use LLM for OCR</span> using state-of-the-art vision models.</li>
+              </ul>
+              <p className="text-slate-500 text-[11px]">
+                To understand the differences between local browser-based OCR and cloud-assisted LLM OCR, read our <button onClick={() => setActiveArticleId('ocr')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">OCR Text Extraction guide <ChevronRight className="h-3 w-3" /></button>.
+              </p>
+            </div>
+
+            {/* Step 5 */}
+            <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-2.5">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold text-xs">5</span>
                 <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Query and Summarize</h3>
               </div>
               <p className="mb-2">
                 Leverage local context to summarize, query, and gather insights from your vault:
               </p>
-              <ul className="list-disc pl-5 space-y-1 mt-1">
+              <ul className="list-disc pl-5 space-y-1 mt-1 mb-3">
                 <li>Click the chat bubble next to any document or open the interactive Document Chat sidebar.</li>
                 <li>Ask natural language questions like <em>"What is the total invoice amount?"</em> or <em>"Summarize the contract terms."</em></li>
                 <li>Your queries and extracted document sections are sent securely to LLM endpoints to construct private answers.</li>
               </ul>
+              <p className="text-slate-500 text-[11px]">
+                For running the vault 100% offline or installing OcularOCR as a native application, view our <button onClick={() => setActiveArticleId('pwa')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">PWA Installation guide <ChevronRight className="h-3 w-3" /></button>.
+              </p>
             </div>
           </div>
         </div>

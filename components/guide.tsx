@@ -1513,6 +1513,27 @@ Environment="OLLAMA_ORIGINS=*"`}
                   </ul>
                 </div>
               </div>
+
+              <div className="border border-slate-200 dark:border-slate-800 rounded p-4 bg-slate-50/50 dark:bg-slate-950/20">
+                <h3 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2 mb-2">
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 text-xs font-bold">3</span>
+                  Ollama Local API Setup
+                </h3>
+                <p className="text-slate-500 mb-3">For a completely private, offline setup, OcularOCR connects directly to your local Ollama instance's OpenAI-compatible endpoint.</p>
+                <ol className="list-decimal pl-4 space-y-1.5 text-slate-600 dark:text-slate-400 mb-3">
+                  <li>Ensure Ollama is installed and running on your local machine.</li>
+                  <li>Verify that CORS origin settings are configured correctly to allow browser connections.</li>
+                  <li>In OcularOCR, go to <span className="font-semibold text-slate-800 dark:text-slate-200">Settings</span>, select the <span className="font-bold">Ollama</span> provider.</li>
+                  <li>Leave the <strong>API Key</strong> field blank, and ensure the API Endpoint is set to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[10px]">http://localhost:11434/v1</code>.</li>
+                  <li>Set your chosen model name (e.g., <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[10px]">qwen2.5-vl:7b</code> or <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[10px]">llama3.2-vision</code>).</li>
+                </ol>
+                <div className="p-3 rounded bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 text-[11px]">
+                  <span className="font-bold text-indigo-700 dark:text-indigo-400 block mb-1">💡 Detailed Installation & Specs:</span>
+                  <p className="text-indigo-900/80 dark:text-indigo-300/80 font-medium">
+                    To walk through full installation, hardware requirements, model choices, and how to enable CORS on macOS, Windows, or Linux, see our detailed <button onClick={() => setActiveArticleId('ollama-offline')} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold inline-flex items-center gap-0.5">Offline AI: Ollama Setup guide <ChevronRight className="h-3 w-3 inline" /></button>.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

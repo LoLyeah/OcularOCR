@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -9,9 +9,11 @@ export function useVersionCheck() {
   const [latestVersion, setLatestVersion] = useState<string>(currentVersion);
   const [updateAvailable, setUpdateAvailable] = useState<boolean>(false);
   const [isChecking, setIsChecking] = useState<boolean>(false);
+  const isCheckingRef = useRef<boolean>(false);
 
   const checkForUpdate = useCallback(async () => {
-    if (isChecking) return;
+    if (isCheckingRef.current) return;
+    isCheckingRef.current = true;
     setIsChecking(true);
     try {
       // Append timestamp to query to prevent any browser cache issues
@@ -35,10 +37,11 @@ export function useVersionCheck() {
     } catch (err) {
       console.error('Failed to check for application updates:', err);
     } finally {
+      isCheckingRef.current = false;
       setIsChecking(false);
     }
     return { available: false, version: currentVersion };
-  }, [currentVersion, isChecking]);
+  }, [currentVersion]);
 
   const performUpdate = useCallback(async () => {
     try {

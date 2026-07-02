@@ -1,4 +1,4 @@
-import { get, set, keys, del } from 'idb-keyval';
+import { get, set, keys, del, clear } from 'idb-keyval';
 import { arrayBufferToBase64, base64ToArrayBuffer } from './crypto';
 
 
@@ -86,16 +86,49 @@ export async function getSettings(): Promise<{ data: ArrayBuffer; iv: Uint8Array
 }
 
 export async function clearVault(): Promise<void> {
-  const allKeys = await keys();
-  for (const k of allKeys) {
-    if (typeof k === 'string' && (k.startsWith(STORAGE_KEY_DOCS) || k === STORAGE_KEY_SALT || k === STORAGE_KEY_SETTINGS || k === STORAGE_KEY_VERIFY)) {
-      await del(k);
-    }
+  // 1. Clear the entire IndexedDB store
+  try {
+    await clear();
+  } catch (err) {
+    console.error('Failed to clear IndexedDB store:', err);
   }
+
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('vault_mode');
-    localStorage.removeItem('vault_passkey_credential_id');
-    localStorage.removeItem('vault_passkey_wrapped_key');
+    // 2. Clear all vault-related localStorage items
+    const keysToRemove = [
+      'vault_mode',
+      'vault_passkey_credential_id',
+      'vault_passkey_wrapped_key',
+      'vault_passkey_wrapped_iv',
+      'vault_theme',
+      'vault_font_size',
+      'pwa_prompt_dismissed'
+    ];
+    keysToRemove.forEach((key) => {
+      localStorage.removeItem(key);
+    });
+
+    // 3. Unregister all service workers
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.unregister();
+        }
+      } catch (err) {
+        console.error('Failed to unregister service workers:', err);
+      }
+    }
+
+    // 4. Delete all Cache Storage caches
+    if ('caches' in window) {
+      try {
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map((key) => caches.delete(key)));
+      } catch (err) {
+        console.error('Failed to clear cache storage:', err);
+      }
+    }
   }
 }
 

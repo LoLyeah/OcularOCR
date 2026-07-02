@@ -16,7 +16,7 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Cry
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt']
   );
 }
@@ -215,7 +215,7 @@ export async function deriveKeyFromPrf(prfValue: ArrayBuffer): Promise<CryptoKey
     baseKey,
     { name: 'AES-GCM', length: 256 },
     false,
-    ['encrypt', 'decrypt']
+    ['wrapKey', 'unwrapKey']
   );
 }
 
@@ -237,7 +237,7 @@ export async function unwrapMasterKey(wrappedData: ArrayBuffer, unwrappingKey: C
     unwrappingKey,
     { name: 'AES-GCM', iv: iv as unknown as BufferSource },
     { name: 'AES-GCM', length: 256 },
-    false,
+    true,
     ['encrypt', 'decrypt']
   );
 }

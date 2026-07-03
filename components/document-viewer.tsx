@@ -187,9 +187,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     };
   }, [doc, cryptoKey]);
 
-  // Update overlay dimensions when overlay is shown or container resizes
+  // Update overlay dimensions when overlay, region mode, or container resizes
   useEffect(() => {
-    if (!showOcrOverlay || !previewContainerRef.current) return;
+    if ((!showOcrOverlay && !isRegionMode) || !previewContainerRef.current) return;
     const updateDims = () => {
       const el = previewContainerRef.current;
       if (el) {
@@ -200,7 +200,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     const ro = new ResizeObserver(updateDims);
     ro.observe(previewContainerRef.current);
     return () => ro.disconnect();
-  }, [showOcrOverlay, structuredOcr]);
+  }, [showOcrOverlay, isRegionMode, structuredOcr]);
 
   const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
     if (doc.type.includes('pdf')) {
@@ -914,8 +914,7 @@ settings = JSON.parse(decryptedStr);
                       </button>
                     </div>
                   )}
-                  <div ref={previewContainerRef} className="relative">
-                    {/* Region mode toolbar */}
+                                    {/* Region mode toolbar (outside relative container for correct dimensions) */}
                     <div className="flex flex-wrap items-center gap-1.5 mb-2">
                       <button
                         onClick={() => { setIsRegionMode(!isRegionMode); if (isRegionMode) setRegions([]); }}
@@ -945,6 +944,7 @@ settings = JSON.parse(decryptedStr);
                         </>
                       )}
                     </div>
+                    <div ref={previewContainerRef} className="relative">
                     {doc.type.includes('pdf') ? (
                       <div ref={pdfContainerRef} className="flex flex-col items-center" />
                     ) : (

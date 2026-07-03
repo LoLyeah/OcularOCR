@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useSyncExternalStore, useEffect } from 'react';
 
 export type Language = 'en' | 'id';
 
@@ -402,24 +402,37 @@ interface LanguageContextProps {
 
 const LanguageContext = createContext<LanguageContextProps | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('en');
+const langListeners = new Set<() => void>();
 
-  // Load initial language from localStorage
+function subscribeToLang(cb: () => void) {
+  langListeners.add(cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    langListeners.delete(cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+
+function getLangSnapshot(): Language {
+  const v = localStorage.getItem('vault_lang');
+  return v === 'en' || v === 'id' ? v : 'en';
+}
+
+function notifyLangListeners() {
+  langListeners.forEach(l => l());
+}
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const language = useSyncExternalStore(subscribeToLang, getLangSnapshot, () => 'en') as Language;
+
   useEffect(() => {
-    const storedLang = localStorage.getItem('vault_lang') as Language;
-    if (storedLang === 'en' || storedLang === 'id') {
-      setLanguageState(storedLang);
-      document.documentElement.lang = storedLang;
-    } else {
-      document.documentElement.lang = 'en';
-    }
-  }, []);
+    document.documentElement.lang = language;
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
     localStorage.setItem('vault_lang', lang);
     document.documentElement.lang = lang;
+    notifyLangListeners();
   };
 
   const t = (key: keyof typeof translationDict, replacements?: Record<string, string | number>): string => {

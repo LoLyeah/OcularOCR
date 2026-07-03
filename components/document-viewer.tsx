@@ -97,11 +97,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isMobile) {
-      setIsCollapsed(true);
-    }
-  }, [isMobile]);
+  const [prevIsMobile, setPrevIsMobile] = useState(isMobile);
+  if (isMobile !== prevIsMobile) {
+    setPrevIsMobile(isMobile);
+    if (isMobile) setIsCollapsed(true);
+  }
 
   useEffect(() => {
     let objectUrl: string;
@@ -260,6 +260,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       
       const useLlm = settings?.useLlmForOcr || settings?.handwritingMode;
 
+      if (useLlm && !settings) {
+        throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
+      }
+
       if (useLlm) {
         setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
         const imagesBase64: string[] = [];
@@ -276,7 +280,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
         }
         
-        extractedText = await extractTextFromImages(imagesBase64, settings);
+        extractedText = await extractTextFromImages(imagesBase64, settings!);
         finalOcrResult = {
           text: extractedText,
           pages: parseOcrPages(extractedText).map(p => ({
@@ -424,7 +428,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         if (encryptedSettings) {
           const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
 settings = JSON.parse(decryptedStr);
-        settingsRef.current = settings;
+        settingsRef.current = settings!;
       }
         const suggestions = await suggestTags(ocrText, doc.name, settings);
         setSuggestedTags(suggestions.filter(t => !tags.includes(t)));
@@ -944,6 +948,7 @@ settings = JSON.parse(decryptedStr);
                     {doc.type.includes('pdf') ? (
                       <div ref={pdfContainerRef} className="flex flex-col items-center" />
                     ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
                       fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
                     )}
                     {isRegionMode && overlayDims.w > 0 && (

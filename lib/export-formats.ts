@@ -47,26 +47,3 @@ export function exportJson(result: StructuredOcrResult, fileName: string): void 
   URL.revokeObjectURL(url);
 }
 
-export function exportSrt(result: StructuredOcrResult, fileName: string): void {
-  const lines: string[] = [];
-  let cueIndex = 1;
-  for (const page of result.pages) {
-    const text = page.text.trim();
-    if (!text) continue;
-    const startTime = `00:${String(Math.floor((cueIndex - 1) * 7 / 60)).padStart(2, '0')}:${String((cueIndex - 1) * 7 % 60).padStart(2, '0')},000`;
-    const endTime = `00:${String(Math.floor(cueIndex * 7 / 60)).padStart(2, '0')}:${String(cueIndex * 7 % 60).padStart(2, '0')},000`;
-    lines.push(String(cueIndex));
-    lines.push(`${startTime} --> ${endTime}`);
-    lines.push(text);
-    lines.push('');
-    cueIndex++;
-  }
-  const srt = lines.join('\n');
-  const blob = new Blob([srt], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName.replace(/\.srt$/, '') + '.srt';
-  a.click();
-  URL.revokeObjectURL(url);
-}

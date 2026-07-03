@@ -163,7 +163,6 @@ export const translationDict: Translations = {
   tablesDetected: { en: 'Tables detected', id: 'Tabel terdeteksi' },
   regionOcrDone: { en: 'Region OCR complete', id: 'OCR wilayah selesai' },
   exportDocx: { en: 'DOCX', id: 'DOCX' },
-  exportSrt: { en: 'SRT', id: 'SRT' },
   exportJson: { en: 'JSON', id: 'JSON' },
   compareEngines: { en: 'Compare Engines', id: 'Bandingkan Mesin' },
   useTesseract: { en: 'Use Tesseract', id: 'Gunakan Tesseract' },

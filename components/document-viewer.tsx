@@ -18,7 +18,7 @@ import { OcrOverlay } from './ocr-overlay';
 import { RegionSelector, type RegionRect } from './region-selector';
 import { ocrRegions } from '@/lib/region-ocr';
 import { detectTables, tableToCsv, tableToMarkdown, type DetectedTable } from '@/lib/table-extract';
-import { exportDocx, exportJson, exportSrt } from '@/lib/export-formats';
+import { exportDocx, exportJson } from '@/lib/export-formats';
 import { OcrDiffModal } from './ocr-diff-modal';
 
 interface DocumentViewerProps {
@@ -694,12 +694,6 @@ settings = JSON.parse(decryptedStr);
     toast({ title: 'JSON exported', variant: "success" });
   };
 
-  const handleExportSrt = () => {
-    if (!structuredOcr) { toast({ title: 'No OCR data', variant: "error" }); return; }
-    exportSrt(structuredOcr, `${doc.name}-ocr.srt`);
-    toast({ title: 'SRT exported', variant: "success" });
-  };
-
   const handleCompareEngines = async () => {
     const s = settingsRef.current;
     if (!s || s.provider === 'ollama') return;
@@ -1052,13 +1046,7 @@ settings = JSON.parse(decryptedStr);
                             <Download className="h-3 w-3" />
                             {t('exportDocx')}
                           </button>
-                          <button
-                            onClick={handleExportSrt}
-                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
-                          >
-                            <Download className="h-3 w-3" />
-                            {t('exportSrt')}
-                          </button>
+
                           <button
                             onClick={handleExportJson}
                             className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"

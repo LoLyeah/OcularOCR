@@ -127,7 +127,7 @@ class TesseractWorkerPool {
       try {
         if (onProgress) onProgress(index, 0.2); // worker acquired
         
-        const ret = await pw.worker.recognize(img);
+        const ret = await pw.worker.recognize(img, {}, { hocr: true });
         
         if (onProgress) onProgress(index, 1.0); // done
         results[index] = ret;

@@ -5,14 +5,14 @@ import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResu
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR } from '@/lib/ocr';
 import { renderPdfToCanvas } from '@/lib/pdf';
-import { summarizeText, extractTextFromImages, correctOcrText } from '@/lib/ai';
+import { summarizeText, extractTextFromImages, correctOcrText, extractStructuredFromImages, StructuredOcrUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
 import { getTagColors } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
-import { exportSearchablePDF } from '@/lib/pdf-export';
+import { exportSearchablePDF, exportReflowedPDF } from '@/lib/pdf-export';
 import { preprocessImage } from '@/lib/preprocessing';
 import { OcrOverlay } from './ocr-overlay';
 import { RegionSelector, type RegionRect } from './region-selector';
@@ -279,16 +279,46 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         for (const canvas of processedCanvases) {
           imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
         }
-        
-        extractedText = await extractTextFromImages(imagesBase64, settings!);
-        finalOcrResult = {
-          text: extractedText,
-          pages: parseOcrPages(extractedText).map(p => ({
-            pageNumber: p.pageNumber,
-            text: p.text,
-            words: []
-          }))
-        };
+
+        // Use structured OCR if enabled
+        const useStructured = settings?.structuredLlmOcr;
+        if (useStructured) {
+          try {
+            const pageDimensions = processedCanvases.map(c => ({ width: c.width, height: c.height }));
+            finalOcrResult = await extractStructuredFromImages(imagesBase64, settings!, pageDimensions);
+            extractedText = finalOcrResult.text;
+          } catch (err) {
+            if (err instanceof StructuredOcrUnsupportedError) {
+              toast({
+                title: language === 'id' ? 'Peringatan OCR Terstruktur' : 'Structured OCR Warning',
+                description: err.message,
+                variant: "info"
+              });
+              // Fall back to plain text extraction
+              extractedText = await extractTextFromImages(imagesBase64, settings!);
+              finalOcrResult = {
+                text: extractedText,
+                pages: parseOcrPages(extractedText).map(p => ({
+                  pageNumber: p.pageNumber,
+                  text: p.text,
+                  words: []
+                }))
+              };
+            } else {
+              throw err;
+            }
+          }
+        } else {
+          extractedText = await extractTextFromImages(imagesBase64, settings!);
+          finalOcrResult = {
+            text: extractedText,
+            pages: parseOcrPages(extractedText).map(p => ({
+              pageNumber: p.pageNumber,
+              text: p.text,
+              words: []
+            }))
+          };
+        }
       } else {
         const languages = selectedLanguages.join('+') || 'eng';
         const total = canvases.length;
@@ -488,15 +518,15 @@ settings = JSON.parse(decryptedStr);
     }
   };
 
-  const handleExportPdf = async (mode: 'searchable' | 'text-only') => {
+  const handleExportPdf = async (mode: 'searchable' | 'reflowed') => {
     if (!ocrText) return;
 
     try {
       if (mode === 'searchable') {
-        if (!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length) {
+        if (!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !(structuredOcr.pages[0].words?.length || structuredOcr.pages[0].lines?.length || structuredOcr.pages[0].blocks?.length)) {
           toast({
             title: language === 'id' ? "PDF Dapat Dicari tidak tersedia" : "Searchable PDF not available",
-            description: language === 'id' ? "Dukungan kata presisi tidak ditemukan. Harap gunakan ekspor Teks saja." : "Precise word metadata not found. Please use Text-only export.",
+            description: language === 'id' ? "Dukungan kata presisi tidak ditemukan. Harap gunakan ekspor PDF Reflow." : "Precise word metadata not found. Please use Reflowed PDF export.",
             variant: "error"
           });
           return;
@@ -514,50 +544,21 @@ settings = JSON.parse(decryptedStr);
           structuredOcr
         });
       } else {
-        const { jsPDF } = await import('jspdf');
-        const pdf = new jsPDF();
-        const parsedPages = parseOcrPages(ocrText);
-        
-        parsedPages.forEach((p, index) => {
-          if (index > 0) {
-            pdf.addPage();
-          }
-          
-          pdf.setFont('courier', 'bold');
-          pdf.setFontSize(10);
-          pdf.setTextColor(100, 116, 139);
-          pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber}`, 15, 12);
-          pdf.setDrawColor(226, 232, 240);
-          pdf.line(15, 15, 195, 15);
-          
-          pdf.setFont('courier', 'normal');
-          pdf.setFontSize(9);
-          pdf.setTextColor(30, 41, 59);
-          
-          const lines = pdf.splitTextToSize(p.text, 180);
-          let y = 22;
-          for (let i = 0; i < lines.length; i++) {
-            if (y > 280) {
-              pdf.addPage();
-              pdf.setFont('courier', 'bold');
-              pdf.setFontSize(10);
-              pdf.setTextColor(100, 116, 139);
-              pdf.text(`EXTRACTED TEXT - PAGE ${p.pageNumber} (CONTINUED)`, 15, 12);
-              pdf.setDrawColor(226, 232, 240);
-              pdf.line(15, 15, 195, 15);
-              
-              pdf.setFont('courier', 'normal');
-              pdf.setFontSize(9);
-              pdf.setTextColor(30, 41, 59);
-              y = 22;
-            }
-            pdf.text(lines[i], 15, y);
-            y += 5.5;
-          }
+        toast({
+          title: language === 'id' ? "Mengekspor PDF Reflow..." : "Exporting Reflowed PDF...",
+          variant: "info"
         });
-        pdf.save(`${doc.name}-extracted.pdf`);
+
+        const canvases = await getPageCanvases();
+        const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
+
+        await exportReflowedPDF({
+          fileName: `${doc.name}-reflowed.pdf`,
+          structuredOcr: structuredOcr || { text: ocrText, pages: parseOcrPages(ocrText).map(p => ({ pageNumber: p.pageNumber, text: p.text, words: [] })) },
+          pageDimensions
+        });
       }
-      
+
       toast({
         title: language === 'id' ? "PDF berhasil diekspor" : "PDF exported successfully",
         variant: "success"
@@ -1056,7 +1057,7 @@ settings = JSON.parse(decryptedStr);
                           </button>
                           <button
                             onClick={() => handleExportPdf('searchable')}
-                            disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length}
+                            disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !(structuredOcr.pages[0].words?.length || structuredOcr.pages[0].lines?.length || structuredOcr.pages[0].blocks?.length)}
                             className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-50/10 border border-indigo-200 dark:border-indigo-800/40 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
                             title={(!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length) ? (language === 'id' ? 'PDF Dapat Dicari memerlukan OCR Tesseract' : 'Searchable PDF requires Tesseract OCR') : ''}
                           >
@@ -1064,11 +1065,11 @@ settings = JSON.parse(decryptedStr);
                             {language === 'id' ? 'PDF Dapat Dicari' : 'Searchable PDF'}
                           </button>
                           <button
-                            onClick={() => handleExportPdf('text-only')}
+                            onClick={() => handleExportPdf('reflowed')}
                             className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
                           >
                             <Download className="h-3 w-3" />
-                            {language === 'id' ? 'PDF Teks Saja' : 'Text-only PDF'}
+                            {language === 'id' ? 'PDF Reflow' : 'Reflowed PDF'}
                           </button>
                           {/* Table detection */}
                           {structuredOcr && structuredOcr.pages && structuredOcr.pages.length > 0 && structuredOcr.pages[selectedOcrPage - 1]?.words?.length > 0 && (

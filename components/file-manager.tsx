@@ -5,7 +5,7 @@ import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
 import { renderPdfToCanvas } from '@/lib/pdf';
 import { performOCR } from '@/lib/ocr';
-import { extractTextFromImages } from '@/lib/ai';
+import { extractTextFromImages, extractStructuredFromImages, StructuredOcrUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
@@ -601,16 +601,41 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
               })
             );
             const imagesBase64 = processedCanvases.map(c => c.toDataURL('image/jpeg', 0.8));
-            finalOcrText = await extractTextFromImages(imagesBase64, settings);
-            const parsedResult = {
-              text: finalOcrText,
-              pages: parseOcrPages(finalOcrText).map(p => ({
-                pageNumber: p.pageNumber,
-                text: p.text,
-                words: []
-              }))
-            };
-            ocrResultToSave = JSON.stringify(parsedResult);
+
+            if (settings?.structuredLlmOcr) {
+              try {
+                const pageDimensions = processedCanvases.map(c => ({ width: c.width, height: c.height }));
+                const structuredResult = await extractStructuredFromImages(imagesBase64, settings, pageDimensions);
+                finalOcrText = structuredResult.text;
+                ocrResultToSave = JSON.stringify(structuredResult);
+              } catch (err) {
+                if (err instanceof StructuredOcrUnsupportedError) {
+                  finalOcrText = await extractTextFromImages(imagesBase64, settings);
+                  const parsedResult = {
+                    text: finalOcrText,
+                    pages: parseOcrPages(finalOcrText).map(p => ({
+                      pageNumber: p.pageNumber,
+                      text: p.text,
+                      words: []
+                    }))
+                  };
+                  ocrResultToSave = JSON.stringify(parsedResult);
+                } else {
+                  throw err;
+                }
+              }
+            } else {
+              finalOcrText = await extractTextFromImages(imagesBase64, settings);
+              const parsedResult = {
+                text: finalOcrText,
+                pages: parseOcrPages(finalOcrText).map(p => ({
+                  pageNumber: p.pageNumber,
+                  text: p.text,
+                  words: []
+                }))
+              };
+              ocrResultToSave = JSON.stringify(parsedResult);
+            }
           } else {
             const languages = settings?.ocrLanguages?.join('+') || 'eng';
             const ocrResult = await performOCR(canvases, languages, prepOpts);

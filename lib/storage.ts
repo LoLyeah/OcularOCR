@@ -48,6 +48,7 @@ export interface AISettings {
   enablePostOcrCorrection?: boolean;
   postOcrCorrectionPrompt?: string;
   handwritingMode?: boolean;
+  structuredLlmOcr?: boolean;
 }
 
 export interface OcrWord {
@@ -56,10 +57,24 @@ export interface OcrWord {
   confidence?: number;
 }
 
+export interface OcrLine {
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+  text: string;
+  words: OcrWord[];
+}
+
+export interface OcrBlock {
+  bbox: { x0: number; y0: number; x1: number; y1: number };
+  text: string;
+  type: 'text' | 'heading' | 'table' | 'list';
+}
+
 export interface OcrPageData {
   pageNumber: number;
   text: string;
   words: OcrWord[];
+  lines?: OcrLine[];
+  blocks?: OcrBlock[];
 }
 
 export interface StructuredOcrResult {

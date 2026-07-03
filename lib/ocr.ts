@@ -2,6 +2,7 @@ import { createWorker } from 'tesseract.js';
 import { ocrPool } from './ocr-pool';
 import { preprocessImage, PreprocessingOptions, rotateCanvas } from './preprocessing';
 import { StructuredOcrResult } from './storage';
+import { parseHocr } from './hocr-parse';
 
 async function autoRotateCanvasIfNeeded(
   canvas: HTMLCanvasElement,
@@ -153,6 +154,10 @@ export async function performOCR(
   const pages = results.map((tesseractResult, idx) => {
     const pageNum = idx + 1;
     const text = tesseractResult.data.text;
+    const canvas = preprocessedCanvases[idx];
+    const pageWidth = canvas?.width || 0;
+    const pageHeight = canvas?.height || 0;
+
     const words = (tesseractResult.data.words || []).map((w: any) => ({
       text: w.text,
       bbox: {
@@ -164,6 +169,18 @@ export async function performOCR(
       confidence: w.conf != null ? w.conf : undefined
     }));
 
+    let lines, blocks;
+    const hocr = tesseractResult.data.hocr;
+    if (hocr && pageWidth > 0 && pageHeight > 0) {
+      try {
+        const parsed = parseHocr(hocr, pageWidth, pageHeight);
+        lines = parsed.lines.length > 0 ? parsed.lines : undefined;
+        blocks = parsed.blocks.length > 0 ? parsed.blocks : undefined;
+      } catch (e) {
+        console.warn(`hOCR parse failed for page ${pageNum}`, e);
+      }
+    }
+
     if (sources.length > 1) {
       concatenatedText += `--- PAGE ${pageNum} ---\n${text}\n\n`;
     } else {
@@ -173,7 +190,9 @@ export async function performOCR(
     return {
       pageNumber: pageNum,
       text,
-      words
+      words,
+      lines,
+      blocks
     };
   });
 

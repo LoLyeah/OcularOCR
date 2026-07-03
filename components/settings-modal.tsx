@@ -73,7 +73,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     pdfRenderScale: 2.0,
     enablePostOcrCorrection: false,
     postOcrCorrectionPrompt: '',
-    handwritingMode: false
+    handwritingMode: false,
+    structuredLlmOcr: false
   });
   
   // Keep track of provider-specific inputs so they don't bleed into each other
@@ -594,6 +595,22 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           <span className="block text-[10px] text-slate-500 dark:text-slate-500 font-normal">{t('useLlmOcrSublabel')}</span>
                         </label>
                       </div>
+
+                      {settings.useLlmForOcr && (
+                        <div className="flex items-center gap-3 pl-6 py-1">
+                          <input
+                            type="checkbox"
+                            id="structuredLlmOcr"
+                            checked={settings.structuredLlmOcr || false}
+                            onChange={(e) => setSettings({ ...settings, structuredLlmOcr: e.target.checked })}
+                            className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                          />
+                          <label htmlFor="structuredLlmOcr" className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                            {t('structuredOcrLabel')}
+                            <span className="block text-[10px] text-slate-500 dark:text-slate-500 font-normal">{t('structuredOcrSub')}</span>
+                          </label>
+                        </div>
+                      )}
 
                       <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 flex flex-col gap-3">
                         <div>

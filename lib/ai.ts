@@ -8,6 +8,18 @@ export class StructuredOcrUnsupportedError extends Error {
   }
 }
 
+export class VisionModelUnsupportedError extends Error {
+  constructor(message?: string) {
+    super(message || 'This model does not support image input. Please choose a vision-capable model.');
+    this.name = 'VisionModelUnsupportedError';
+  }
+}
+
+function isVisionModelError(err: any): boolean {
+  const msg = (err?.message || err?.error?.message || '').toLowerCase();
+  return msg.includes('does not support image') || msg.includes('image input') || msg.includes('does not support multimodal') || msg.includes('image not supported') || msg.includes('cannot read') && msg.includes('image');
+}
+
 export async function summarizeText(text: string, settings: AISettings, tags?: string[]): Promise<string> {
   let prompt = '';
   if (settings.customSummaryPrompt && settings.customSummaryPrompt.trim()) {
@@ -75,6 +87,9 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 
     if (!res.ok) {
       const errText = await res.text();
+      if (isVisionModelError({ message: errText })) {
+        throw new VisionModelUnsupportedError(`Model "${settings.model}" does not support image input. Please choose a vision-capable model.`);
+      }
       throw new Error(`API Error: ${res.status} - ${errText}`);
     }
 
@@ -150,6 +165,9 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
 
     if (!res.ok) {
       const errText = await res.text();
+      if (isVisionModelError({ message: errText })) {
+        throw new VisionModelUnsupportedError(`Model "${settings.model}" does not support image input. Please choose a vision-capable model.`);
+      }
       throw new Error(`API Error: ${res.status} - ${errText}`);
     }
 
@@ -291,6 +309,9 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
 
     if (!res.ok) {
       const errText = await res.text();
+      if (isVisionModelError({ message: errText })) {
+        throw new VisionModelUnsupportedError(`Model "${settings.model}" does not support image input. Please choose a vision-capable model.`);
+      }
       throw new Error(`API Error: ${res.status} - ${errText}`);
     }
 
@@ -424,6 +445,9 @@ export async function correctOcrText(
 
     if (!res.ok) {
       const errText = await res.text();
+      if (isVisionModelError({ message: errText })) {
+        throw new VisionModelUnsupportedError(`Model "${settings.model}" does not support image input. Please choose a vision-capable model.`);
+      }
       throw new Error(`API Error: ${res.status} - ${errText}`);
     }
 

@@ -81,7 +81,7 @@ export const translationDict: Translations = {
   // Settings Modal - General
   aiSettingsTab: { en: 'AI Processing', id: 'Pemrosesan AI' },
   appearanceSettingsTab: { en: 'Appearance', id: 'Tampilan' },
-  offlineSettingsTab: { en: 'Local OCR', id: 'OCR Lokal' },
+  offlineSettingsTab: { en: 'OCR', id: 'OCR' },
   systemSettingsTab: { en: 'System & Security', id: 'Sistem & Keamanan' },
   saveSettingsBtn: { en: 'Save Settings', id: 'Simpan Pengaturan' },
   savingSettingsToast: { en: 'Saving settings...', id: 'Menyimpan pengaturan...' },
@@ -157,6 +157,7 @@ export const translationDict: Translations = {
   denoiseHintClean: { en: 'skipped - image clean', id: 'dilewati - gambar bersih' },
   recommendedClean: { en: 'Image looks clean, minimal processing needed', id: 'Gambar terlihat bersih, pemrosesan minimal' },
   recommendedProcessing: { en: 'Processing recommended for best results', id: 'Pemrosesan direkomendasikan untuk hasil terbaik' },
+  visionModelError: { en: 'This model does not support image input. Please choose a vision-capable model.', id: 'Model ini tidak mendukung input gambar. Pilih model yang mendukung vision.' },
   pdfRenderScaleLabel: { en: 'PDF Render Scale', id: 'Skala Render PDF' },
   pdfRenderScaleSub: { en: 'Higher = sharper OCR on low-DPI scans (1.5-4.0)', id: 'Lebih tinggi = OCR lebih tajam pada pindaian resolusi rendah (1.5-4.0)' },
   showOcrOverlay: { en: 'Show Confidence Overlay', id: 'Tampilkan Overlay Kepercayaan' },

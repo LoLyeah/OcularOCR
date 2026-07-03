@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, BrainCircuit, Palette, WifiOff, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download } from 'lucide-react';
+import { X, Check, BrainCircuit, Palette, ScanText, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, getSettings, saveSettings, clearVault, exportVaultEncrypted, importVaultEncrypted, getSalt } from '@/lib/storage';
 import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPrf, wrapMasterKey, arrayBufferToBase64, deriveKeyFromPrf } from '@/lib/crypto';
@@ -475,7 +475,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-800'
             }`}
           >
-            <WifiOff className="h-4 w-4 shrink-0" />
+            <ScanText className="h-4 w-4 shrink-0" />
             {t('offlineSettingsTab')}
           </button>
 

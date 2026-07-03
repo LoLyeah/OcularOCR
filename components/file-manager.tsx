@@ -5,7 +5,7 @@ import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
 import { renderPdfToCanvas } from '@/lib/pdf';
 import { performOCR } from '@/lib/ocr';
-import { extractTextFromImages, extractStructuredFromImages, StructuredOcrUnsupportedError } from '@/lib/ai';
+import { extractTextFromImages, extractStructuredFromImages, StructuredOcrUnsupportedError, VisionModelUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
@@ -673,11 +673,19 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
         variant: "success"
       });
     } catch (err: any) {
-      toast({
-        title: language === 'id' ? "OCR massal gagal" : "Bulk OCR failed",
-        description: err.message || "An unexpected error occurred during bulk processing.",
-        variant: "error"
-      });
+      if (err instanceof VisionModelUnsupportedError) {
+        toast({
+          title: language === 'id' ? 'Model Tidak Mendukung Vision' : 'Model Does Not Support Vision',
+          description: err.message,
+          variant: "info"
+        });
+      } else {
+        toast({
+          title: language === 'id' ? "OCR massal gagal" : "Bulk OCR failed",
+          description: err.message || "An unexpected error occurred during bulk processing.",
+          variant: "error"
+        });
+      }
     } finally {
       setIsProcessingBulk(false);
       setBulkProgress('');

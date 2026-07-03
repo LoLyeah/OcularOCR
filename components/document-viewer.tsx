@@ -5,7 +5,7 @@ import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResu
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR } from '@/lib/ocr';
 import { renderPdfToCanvas } from '@/lib/pdf';
-import { summarizeText, extractTextFromImages, correctOcrText, extractStructuredFromImages, StructuredOcrUnsupportedError } from '@/lib/ai';
+import { summarizeText, extractTextFromImages, correctOcrText, extractStructuredFromImages, StructuredOcrUnsupportedError, VisionModelUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
 import { getTagColors } from '@/lib/utils';
@@ -416,7 +416,15 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         variant: "success"
       });
     } catch (err: any) {
-      setError(err.message || 'OCR failed');
+      if (err instanceof VisionModelUnsupportedError) {
+        toast({
+          title: language === 'id' ? 'Model Tidak Mendukung Vision' : 'Model Does Not Support Vision',
+          description: err.message,
+          variant: "info"
+        });
+      } else {
+        setError(err.message || 'OCR failed');
+      }
       console.error('OCR failed', err);
     } finally {
       setIsProcessingOcr(false);

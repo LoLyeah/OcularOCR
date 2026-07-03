@@ -92,7 +92,7 @@ function ModelRegistry() {
       context: '8K Tokens',
       accuracy: 91.8,
       accuracyStr: '91.8%',
-      optimizedFor: 'Edge/Local OCR',
+      optimizedFor: 'OCR',
       type: 'open-source'
     },
     {

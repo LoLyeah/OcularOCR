@@ -69,7 +69,11 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     preprocessingDeskew: true,
     preprocessingRotate: true,
     preprocessingBinarize: false,
-    rotationThreshold: 3.0
+    rotationThreshold: 3.0,
+    pdfRenderScale: 2.0,
+    enablePostOcrCorrection: false,
+    postOcrCorrectionPrompt: '',
+    handwritingMode: false
   });
   
   // Keep track of provider-specific inputs so they don't bleed into each other
@@ -149,6 +153,10 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             preprocessingRotate: parsed.preprocessingRotate ?? true,
             preprocessingBinarize: parsed.preprocessingBinarize ?? false,
             rotationThreshold: parsed.rotationThreshold ?? 3.0,
+            pdfRenderScale: parsed.pdfRenderScale ?? 2.0,
+            enablePostOcrCorrection: parsed.enablePostOcrCorrection ?? false,
+            postOcrCorrectionPrompt: parsed.postOcrCorrectionPrompt ?? '',
+            handwritingMode: parsed.handwritingMode ?? false,
           }));
           
           if (parsed.configs) {
@@ -683,11 +691,33 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                                 onChange={(e) => setSettings({ ...settings, rotationThreshold: parseFloat(e.target.value) })}
                                 className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
                               />
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
+                      </div>
 
-                        {/* OCR Languages Section */}
+                      {/* PDF Render Scale */}
+                      <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <label htmlFor="pdfRenderScale" className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest cursor-pointer select-none">
+                            {t('pdfRenderScaleLabel')}
+                            <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('pdfRenderScaleSub')}</span>
+                          </label>
+                          <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {settings.pdfRenderScale ?? 2.0}
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1.5"
+                          max="4.0"
+                          step="0.5"
+                          value={settings.pdfRenderScale ?? 2.0}
+                          onChange={(e) => setSettings({ ...settings, pdfRenderScale: parseFloat(e.target.value) })}
+                          className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
+                        />
+                      </div>
+
+                      {/* OCR Languages Section */}
                         {!settings.useLlmForOcr && (
                           <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-2">
                             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">
@@ -739,6 +769,62 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             </div>
                           </div>
                         )}
+
+                        {/* Post-OCR Correction */}
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="enablePostOcrCorrection" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest cursor-pointer select-none">
+                              {t('enablePostOcrCorrection')}
+                              <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('enablePostOcrCorrectionSub')}</span>
+                            </label>
+                            <input
+                              type="checkbox"
+                              id="enablePostOcrCorrection"
+                              checked={settings.enablePostOcrCorrection ?? false}
+                              onChange={(e) => setSettings({ ...settings, enablePostOcrCorrection: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                            />
+                          </div>
+
+                          {(settings.enablePostOcrCorrection ?? false) && (
+                            <div className="pl-3 border-l-2 border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+                              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('postOcrCorrectionPromptLabel')}</label>
+                              <textarea
+                                value={settings.postOcrCorrectionPrompt || ''}
+                                onChange={(e) => setSettings({ ...settings, postOcrCorrectionPrompt: e.target.value })}
+                                placeholder="Leave empty for default: Fix OCR errors, preserve structure..."
+                                rows={2}
+                                className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white font-mono custom-scrollbar"
+                              />
+                              <p className="text-[8px] text-slate-400 dark:text-slate-500">
+                                {t('postOcrCorrectionPromptHelp')}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Handwriting Mode */}
+                        <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <label htmlFor="handwritingMode" className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest cursor-pointer select-none">
+                              {t('handwritingMode')}
+                              <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('handwritingModeSub')}</span>
+                            </label>
+                            <input
+                              type="checkbox"
+                              id="handwritingMode"
+                              checked={settings.handwritingMode ?? false}
+                              onChange={(e) => setSettings({ ...settings, handwritingMode: e.target.checked })}
+                              className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer"
+                            />
+                          </div>
+                          {(settings.handwritingMode ?? false) && (
+                            <div className="flex items-start gap-2 rounded bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 p-2.5 text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed">
+                              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                              <span>{t('handwritingModeWarning')}</span>
+                            </div>
+                          )}
+                        </div>
 
                         <div className="mt-1">
                           <button

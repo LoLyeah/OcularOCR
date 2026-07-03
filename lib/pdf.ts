@@ -1,4 +1,4 @@
-export async function renderPdfToCanvas(pdfData: ArrayBuffer): Promise<HTMLCanvasElement[]> {
+export async function renderPdfToCanvas(pdfData: ArrayBuffer, scale: number = 2.0): Promise<HTMLCanvasElement[]> {
   const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
@@ -8,7 +8,7 @@ export async function renderPdfToCanvas(pdfData: ArrayBuffer): Promise<HTMLCanva
 
   for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
     const page = await pdf.getPage(pageNum);
-    const viewport = page.getViewport({ scale: 2.0 }); 
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
     

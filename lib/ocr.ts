@@ -160,7 +160,8 @@ export async function performOCR(
         y0: w.bbox.y0,
         x1: w.bbox.x1,
         y1: w.bbox.y1
-      }
+      },
+      confidence: w.conf != null ? w.conf : undefined
     }));
 
     if (sources.length > 1) {

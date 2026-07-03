@@ -11,7 +11,6 @@ import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
 import { parseOcrPages } from './document-viewer';
-import { preprocessImage } from '@/lib/preprocessing';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -570,8 +569,8 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             grayscale: settings?.preprocessingGrayscale ?? true,
             contrast: settings?.preprocessingContrast ?? true,
             binarize: settings?.preprocessingBinarize ?? false,
-            denoise: settings?.preprocessingDenoise ?? true,
-            deskew: settings?.preprocessingDeskew ?? true,
+            denoise: settings?.preprocessingDenoise ?? false,
+            deskew: settings?.preprocessingDeskew ?? false,
             rotate: settings?.preprocessingRotate ?? true,
             rotationThreshold: settings?.rotationThreshold ?? 3.0
           };
@@ -594,17 +593,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           }
 
           if (settings?.useLlmForOcr) {
-            const processedCanvases = await Promise.all(
-              canvases.map(async c => {
-                const res = await preprocessImage(c, prepOpts);
-                return res.canvas;
-              })
-            );
-            const imagesBase64 = processedCanvases.map(c => c.toDataURL('image/jpeg', 0.8));
+            const imagesBase64 = canvases.map(c => c.toDataURL('image/jpeg', 0.8));
 
             if (settings?.structuredLlmOcr) {
               try {
-                const pageDimensions = processedCanvases.map(c => ({ width: c.width, height: c.height }));
+                const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
                 const structuredResult = await extractStructuredFromImages(imagesBase64, settings, pageDimensions);
                 finalOcrText = structuredResult.text;
                 ocrResultToSave = JSON.stringify(structuredResult);

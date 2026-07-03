@@ -13,7 +13,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
 import { exportSearchablePDF, exportReflowedPDF } from '@/lib/pdf-export';
-import { preprocessImage } from '@/lib/preprocessing';
+import { preprocessImage, estimateImageQuality } from '@/lib/preprocessing';
+import type { PreprocessingOptions, ImageQuality } from '@/lib/preprocessing';
 import { OcrOverlay } from './ocr-overlay';
 import { RegionSelector, type RegionRect } from './region-selector';
 import { ocrRegions } from '@/lib/region-ocr';
@@ -90,6 +91,16 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     languages: string;
     prepOpts: any;
   } | null>(null);
+
+  const [ocrStage, setOcrStage] = useState<'idle' | 'configure' | 'running'>('idle');
+  const [localPrepOpts, setLocalPrepOpts] = useState<PreprocessingOptions | null>(null);
+  const [previewMode, setPreviewMode] = useState<'before' | 'after' | 'split'>('split');
+  const [configurePage, setConfigurePage] = useState(0);
+  const [prepMode, setPrepMode] = useState<'auto' | 'manual' | 'off'>('auto');
+  const [previewProcessedUrl, setPreviewProcessedUrl] = useState<string | null>(null);
+  const [qualityEstimate, setQualityEstimate] = useState<ImageQuality | null>(null);
+  const [originalCanvases, setOriginalCanvases] = useState<HTMLCanvasElement[]>([]);
+  const pendingPrepOptsRef = useRef<PreprocessingOptions | null>(null);
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -202,6 +213,22 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => ro.disconnect();
   }, [showOcrOverlay, isRegionMode, structuredOcr]);
 
+  // Live preview processing for configure panel
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = originalCanvases[configurePage] || originalCanvases[0];
+    if (!canvas || ocrStage !== 'configure' || !localPrepOpts) {
+      return () => { cancelled = true; };
+    }
+    const timer = setTimeout(async () => {
+      const result = await preprocessImage(canvas, localPrepOpts);
+      if (!cancelled) {
+        setPreviewProcessedUrl(result.canvas.toDataURL('image/jpeg', 0.92));
+      }
+    }, 150);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [ocrStage, localPrepOpts, configurePage, originalCanvases]);
+
   const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
     if (doc.type.includes('pdf')) {
       const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
@@ -242,16 +269,18 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       let extractedText = '';
       let finalOcrResult: StructuredOcrResult;
 
-      const prepOpts = {
+      // Use configure panel options if set, else derive from settings
+      const prepOpts = pendingPrepOptsRef.current || {
         enabled: settings?.enablePreprocessing ?? true,
         grayscale: settings?.preprocessingGrayscale ?? true,
         contrast: settings?.preprocessingContrast ?? true,
         binarize: settings?.preprocessingBinarize ?? false,
-        denoise: settings?.preprocessingDenoise ?? true,
-        deskew: settings?.preprocessingDeskew ?? true,
+        denoise: settings?.preprocessingDenoise ?? false,
+        deskew: settings?.preprocessingDeskew ?? false,
         rotate: settings?.preprocessingRotate ?? true,
         rotationThreshold: settings?.rotationThreshold ?? 3.0
       };
+      pendingPrepOptsRef.current = null;
 
       const canvases = await getPageCanvases();
       if (canvases.length === 0) {
@@ -267,16 +296,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       if (useLlm) {
         setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
         const imagesBase64: string[] = [];
-        
-        // Preprocess pages for AI Vision OCR as well
-        const processedCanvases = await Promise.all(
-          canvases.map(async c => {
-            const res = await preprocessImage(c, prepOpts);
-            return res.canvas;
-          })
-        );
 
-        for (const canvas of processedCanvases) {
+        for (const canvas of canvases) {
           imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
         }
 
@@ -284,7 +305,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         const useStructured = settings?.structuredLlmOcr;
         if (useStructured) {
           try {
-            const pageDimensions = processedCanvases.map(c => ({ width: c.width, height: c.height }));
+            const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
             finalOcrResult = await extractStructuredFromImages(imagesBase64, settings!, pageDimensions);
             extractedText = finalOcrResult.text;
           } catch (err) {
@@ -401,6 +422,62 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       setIsProcessingOcr(false);
       setOcrProgressText('');
     }
+  };
+
+  const startConfigure = async () => {
+    try {
+      const canvases = await getPageCanvases();
+      if (canvases.length === 0) {
+        toast({ title: language === 'id' ? 'Tidak ada halaman ditemukan' : 'No pages found', variant: 'error' });
+        return;
+      }
+      setOriginalCanvases(canvases);
+
+      const encryptedSettings = await getSettings();
+      let settings: AISettings | undefined;
+      if (encryptedSettings) {
+        const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+        settings = JSON.parse(decryptedStr);
+      }
+
+      const quality = estimateImageQuality(
+        canvases[0].getContext('2d')!.getImageData(0, 0, canvases[0].width, canvases[0].height)
+      );
+      setQualityEstimate(quality);
+
+      setLocalPrepOpts({
+        enabled: settings?.enablePreprocessing ?? true,
+        grayscale: settings?.preprocessingGrayscale ?? true,
+        contrast: settings?.preprocessingContrast ?? true,
+        binarize: settings?.preprocessingBinarize ?? false,
+        denoise: settings?.preprocessingDenoise ?? false,
+        deskew: settings?.preprocessingDeskew ?? false,
+        rotate: settings?.preprocessingRotate ?? true,
+        rotationThreshold: settings?.rotationThreshold ?? 3.0,
+        mode: 'auto'
+      });
+      setPrepMode('auto');
+      setConfigurePage(0);
+      setOcrStage('configure');
+    } catch (err: any) {
+      console.error('Configure start failed', err);
+      toast({ title: 'Failed to prepare preview', variant: 'error' });
+    }
+  };
+
+  const runConfiguredOcr = () => {
+    if (!localPrepOpts) return;
+    pendingPrepOptsRef.current = localPrepOpts;
+    setOcrStage('running');
+    handleRunOcr();
+  };
+
+  const cancelConfigure = () => {
+    setOcrStage('idle');
+    setLocalPrepOpts(null);
+    setPreviewProcessedUrl(null);
+    setQualityEstimate(null);
+    setOriginalCanvases([]);
   };
 
   const handleSummarize = async () => {
@@ -1151,11 +1228,172 @@ settings = JSON.parse(decryptedStr);
             </AnimatePresence>
           </div>
           
-          {activeTab === 'preview' && !ocrText && !isProcessingOcr && (
+          {ocrStage === 'configure' && localPrepOpts && originalCanvases.length > 0 && (
+            <div className="mx-auto mt-3 max-w-4xl">
+              <div className="rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                {/* Preview canvases */}
+                <div className="flex items-center justify-center gap-2 mb-3">
+                  {previewMode === 'before' || previewMode === 'split' ? (
+                    <div className="flex-1 text-center">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">{t('previewBefore')}</p>
+                      <canvas
+                        ref={(el) => {
+                          if (el && originalCanvases[configurePage]) {
+                            const src = originalCanvases[configurePage];
+                            el.width = Math.min(src.width, 320);
+                            el.height = Math.round(src.height * (Math.min(src.width, 320) / src.width));
+                            const ctx = el.getContext('2d');
+                            if (ctx) ctx.drawImage(src, 0, 0, el.width, el.height);
+                          }
+                        }}
+                        className="w-full rounded border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"
+                      />
+                    </div>
+                  ) : null}
+                  {previewMode === 'after' || previewMode === 'split' ? (
+                    <div className="flex-1 text-center">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">{t('previewAfter')}</p>
+                      {previewProcessedUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={previewProcessedUrl} alt="Processed" className="w-full rounded border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950" />
+                      ) : (
+                        <div className="flex items-center justify-center h-32 text-slate-400 text-[10px]">
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          Processing...
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* Preview mode toggle + page nav */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex gap-0.5 bg-slate-100 dark:bg-slate-800 rounded p-0.5">
+                    {(['before', 'split', 'after'] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setPreviewMode(m)}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded cursor-pointer ${
+                          previewMode === m ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-800 dark:text-slate-100' : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                      >
+                        {m === 'before' ? t('previewBefore') : m === 'split' ? t('previewSplit') : t('previewAfter')}
+                      </button>
+                    ))}
+                  </div>
+                  {originalCanvases.length > 1 && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        disabled={configurePage === 0}
+                        onClick={() => setConfigurePage(p => Math.max(0, p - 1))}
+                        className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-30 cursor-pointer"
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        {language === 'id' ? `Halaman ${configurePage + 1}/${originalCanvases.length}` : `Page ${configurePage + 1}/${originalCanvases.length}`}
+                      </span>
+                      <button
+                        disabled={configurePage >= originalCanvases.length - 1}
+                        onClick={() => setConfigurePage(p => Math.min(originalCanvases.length - 1, p + 1))}
+                        className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-30 cursor-pointer"
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mode selector */}
+                <div className="flex items-center gap-2 mb-2">
+                  {(['auto', 'manual', 'off'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => {
+                        setPrepMode(m);
+                        if (m === 'off') setLocalPrepOpts({ ...localPrepOpts, enabled: false, mode: 'off' });
+                        else if (m === 'auto') setLocalPrepOpts({ ...localPrepOpts, enabled: true, mode: 'auto' });
+                        else setLocalPrepOpts({ ...localPrepOpts, enabled: true, mode: 'manual' });
+                      }}
+                      className={`px-2.5 py-1 text-[10px] font-bold rounded cursor-pointer border transition-colors ${
+                        prepMode === m
+                          ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                      }`}
+                    >
+                      {m === 'auto' ? t('ocrModeAuto') : m === 'manual' ? t('ocrModeManual') : t('ocrModeOff')}
+                    </button>
+                  ))}
+                  {prepMode === 'auto' && qualityEstimate && (
+                    <span className="text-[9px] text-slate-400 ml-1">
+                      {qualityEstimate.noise < 0.08 && qualityEstimate.contrast > 0.4
+                        ? t('recommendedClean')
+                        : t('recommendedProcessing')}
+                    </span>
+                  )}
+                </div>
+
+                {/* Toggle checkboxes (hidden when off) */}
+                {prepMode !== 'off' && (
+                  <div className="grid grid-cols-3 gap-1 mb-3">
+                    {[
+                      { key: 'grayscale', label: t('grayscaleToggle') },
+                      { key: 'contrast', label: t('contrastToggle') },
+                      { key: 'denoise', label: t('denoiseToggle') },
+                      { key: 'deskew', label: t('deskewToggle') },
+                      { key: 'binarize', label: t('binarizeToggle') },
+                      { key: 'rotate', label: t('rotateToggle') },
+                    ].map((step) => {
+                      const checked = (localPrepOpts as any)[step.key] ?? false;
+                      const disabled = prepMode === 'auto';
+                      let hint = '';
+                      if (prepMode === 'auto' && qualityEstimate) {
+                        if (step.key === 'denoise') hint = qualityEstimate.noise >= 0.08 ? '' : t('denoiseHintClean');
+                        if (step.key === 'deskew') hint = '';
+                      }
+                      return (
+                        <label key={step.key} className={`flex items-center gap-1.5 text-[10px] cursor-pointer ${disabled ? 'opacity-60' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => setLocalPrepOpts({ ...localPrepOpts, [step.key]: !checked })}
+                            className="h-3 w-3 rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 dark:bg-slate-900 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                          <span className="text-slate-600 dark:text-slate-400">{step.label}</span>
+                          {hint && <span className="text-[8px] text-slate-400 ml-auto">{hint}</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={cancelConfigure}
+                    className="px-3 py-1.5 text-[10px] font-bold rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button
+                    onClick={runConfiguredOcr}
+                    disabled={isProcessingOcr}
+                    className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold rounded bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer disabled:opacity-50"
+                  >
+                    {isProcessingOcr ? <Loader2 className="h-3 w-3 animate-spin" /> : <ScanText className="h-3 w-3" />}
+                    {t('runOcrNow')}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {ocrStage !== 'configure' && activeTab === 'preview' && !ocrText && !isProcessingOcr && (
              <div className="mx-auto mt-3 flex flex-col items-center max-w-4xl justify-center">
                 {renderLanguageSelector()}
                 <button
-                  onClick={handleRunOcr}
+                  onClick={startConfigure}
                   className="flex items-center gap-2 rounded bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 cursor-pointer"
                 >
                   <ScanText className="h-4 w-4" />
@@ -1164,11 +1402,11 @@ settings = JSON.parse(decryptedStr);
              </div>
           )}
           
-          {activeTab === 'preview' && ocrText && !isProcessingOcr && (
+          {ocrStage !== 'configure' && activeTab === 'preview' && ocrText && !isProcessingOcr && (
              <div className="mx-auto mt-3 flex flex-col items-center max-w-4xl justify-center">
                 {renderLanguageSelector()}
                 <button
-                  onClick={handleRunOcr}
+                  onClick={startConfigure}
                   className="flex items-center gap-2 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-5 py-2 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
                 >
                   <RefreshCw className="h-4 w-4 text-indigo-500" />

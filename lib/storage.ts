@@ -44,11 +44,16 @@ export interface AISettings {
   preprocessingRotate?: boolean;
   preprocessingBinarize?: boolean;
   rotationThreshold?: number;
+  pdfRenderScale?: number;
+  enablePostOcrCorrection?: boolean;
+  postOcrCorrectionPrompt?: string;
+  handwritingMode?: boolean;
 }
 
 export interface OcrWord {
   text: string;
   bbox: { x0: number; y0: number; x1: number; y1: number };
+  confidence?: number;
 }
 
 export interface OcrPageData {

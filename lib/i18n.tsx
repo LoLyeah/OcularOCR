@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useSyncExternalStore, useEffect } from 'react';
 
 export type Language = 'en' | 'id';
 
@@ -142,6 +142,32 @@ export const translationDict: Translations = {
   ocrLanguagesSub: { en: 'Select languages to recognize. Bundled languages run offline.', id: 'Pilih bahasa untuk dikenali. Bahasa bawaan berjalan offline.' },
   exportSearchablePdf: { en: 'Searchable PDF (Sandwich)', id: 'PDF Dapat Dicari (Sandwich)' },
   exportTextPdf: { en: 'Text-only PDF', id: 'PDF Teks Saja' },
+  pdfRenderScaleLabel: { en: 'PDF Render Scale', id: 'Skala Render PDF' },
+  pdfRenderScaleSub: { en: 'Higher = sharper OCR on low-DPI scans (1.5-4.0)', id: 'Lebih tinggi = OCR lebih tajam pada pindaian resolusi rendah (1.5-4.0)' },
+  showOcrOverlay: { en: 'Show Confidence Overlay', id: 'Tampilkan Overlay Kepercayaan' },
+  hideOcrOverlay: { en: 'Hide Confidence Overlay', id: 'Sembunyikan Overlay Kepercayaan' },
+  enablePostOcrCorrection: { en: 'Post-OCR LLM Correction', id: 'Koreksi OCR dengan LLM' },
+  enablePostOcrCorrectionSub: { en: 'Send Tesseract result to AI for error cleanup (requires AI config)', id: 'Kirim hasil Tesseract ke AI untuk pembersihan kesalahan (memerlukan konfigurasi AI)' },
+  postOcrCorrectionPromptLabel: { en: 'Post-OCR Correction Prompt', id: 'Prompt Koreksi Pasca-OCR' },
+  postOcrCorrectionPromptHelp: { en: 'Custom instructions for correcting OCR output. Use {{text}} placeholder.', id: 'Instruksi kustom untuk mengoreksi output OCR. Gunakan placeholder {{text}}.' },
+  handwritingMode: { en: 'Handwriting Recognition Mode', id: 'Mode Pengenalan Tulisan Tangan' },
+  handwritingModeSub: { en: 'Optimizes AI prompts for handwritten text. Forces LLM Vision OCR.', id: 'Optimalkan prompt AI untuk teks tulisan tangan. Memaksa LLM Vision OCR.' },
+  handwritingModeWarning: { en: 'Handwriting mode requires an AI provider with vision support. Tesseract is not available for handwriting.', id: 'Mode tulisan tangan memerlukan penyedia AI dengan dukungan vision. Tesseract tidak tersedia untuk tulisan tangan.' },
+  selectRegion: { en: 'Select Region', id: 'Pilih Wilayah' },
+  exitRegionMode: { en: 'Exit Region Mode', id: 'Keluar Mode Wilayah' },
+  ocrRegion: { en: 'OCR Region(s)', id: 'OCR Wilayah' },
+  detectTables: { en: 'Detect Tables', id: 'Deteksi Tabel' },
+  exportCsv: { en: 'Export CSV', id: 'Ekspor CSV' },
+  exportMarkdownTable: { en: 'Export Table (MD)', id: 'Ekspor Tabel (MD)' },
+  noTablesFound: { en: 'No tables detected in this page.', id: 'Tidak ada tabel yang terdeteksi di halaman ini.' },
+  tablesDetected: { en: 'Tables detected', id: 'Tabel terdeteksi' },
+  regionOcrDone: { en: 'Region OCR complete', id: 'OCR wilayah selesai' },
+  exportDocx: { en: 'DOCX', id: 'DOCX' },
+  exportSrt: { en: 'SRT', id: 'SRT' },
+  exportJson: { en: 'JSON', id: 'JSON' },
+  compareEngines: { en: 'Compare Engines', id: 'Bandingkan Mesin' },
+  useTesseract: { en: 'Use Tesseract', id: 'Gunakan Tesseract' },
+  useLlm: { en: 'Use LLM Vision', id: 'Gunakan LLM Vision' },
 
   // Settings - Appearance Tab
   colorThemeLabel: { en: 'Color Theme', id: 'Tema Warna' },
@@ -376,24 +402,37 @@ interface LanguageContextProps {
 
 const LanguageContext = createContext<LanguageContextProps | undefined>(undefined);
 
-export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>('en');
+const langListeners = new Set<() => void>();
 
-  // Load initial language from localStorage
+function subscribeToLang(cb: () => void) {
+  langListeners.add(cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    langListeners.delete(cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+
+function getLangSnapshot(): Language {
+  const v = localStorage.getItem('vault_lang');
+  return v === 'en' || v === 'id' ? v : 'en';
+}
+
+function notifyLangListeners() {
+  langListeners.forEach(l => l());
+}
+
+export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const language = useSyncExternalStore(subscribeToLang, getLangSnapshot, () => 'en') as Language;
+
   useEffect(() => {
-    const storedLang = localStorage.getItem('vault_lang') as Language;
-    if (storedLang === 'en' || storedLang === 'id') {
-      setLanguageState(storedLang);
-      document.documentElement.lang = storedLang;
-    } else {
-      document.documentElement.lang = 'en';
-    }
-  }, []);
+    document.documentElement.lang = language;
+  }, [language]);
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
     localStorage.setItem('vault_lang', lang);
     document.documentElement.lang = lang;
+    notifyLangListeners();
   };
 
   const t = (key: keyof typeof translationDict, replacements?: Record<string, string | number>): string => {

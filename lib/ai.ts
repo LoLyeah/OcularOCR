@@ -79,9 +79,15 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {
+  let defaultPrompt = "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
+  
+  if (settings.handwritingMode) {
+    defaultPrompt = "These images contain handwritten text. Transcribe all handwritten content faithfully, preserving line breaks and reading order. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
+  }
+
   const prompt = settings.customOcrPrompt && settings.customOcrPrompt.trim()
     ? settings.customOcrPrompt
-    : "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
+    : defaultPrompt;
 
   const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
 
@@ -142,6 +148,76 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
 
     const data = await res.json();
     return data.choices?.[0]?.message?.content || '';
+  }
+
+  throw new Error('Invalid AI provider configured.');
+}
+
+export async function correctOcrText(
+  text: string,
+  settings: AISettings,
+  imageBase64?: string
+): Promise<string> {
+  const prompt = settings.postOcrCorrectionPrompt && settings.postOcrCorrectionPrompt.trim()
+    ? settings.postOcrCorrectionPrompt.replace('{{text}}', text)
+    : `Fix any OCR errors in the following text. Preserve line breaks, paragraphs, and reading order. Output only the corrected text without any introductory remarks or explanations:\n\n${text}`;
+
+  const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
+
+  if (settings.provider === 'gemini') {
+    const ai = new GoogleGenAI({ apiKey: settings.apiKey });
+    const contents: any[] = [prompt];
+    if (imageBase64) {
+      const mimeType = imageBase64.split(';')[0].split(':')[1];
+      const data = imageBase64.split(',')[1];
+      contents.unshift({ inlineData: { mimeType, data } });
+    }
+    const response = await ai.models.generateContent({
+      model: settings.model || 'gemini-3.5-flash',
+      contents,
+      config: { temperature: temp }
+    });
+    return response.text || text;
+  } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
+    const isOllama = settings.provider === 'ollama';
+    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    let endpoint = settings.endpoint || defaultEndpoint;
+    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
+      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
+    }
+    const isGroq = endpoint.includes('groq.com');
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (settings.apiKey) {
+      headers['Authorization'] = `Bearer ${settings.apiKey}`;
+    }
+
+    const contentArray: any[] = [{ type: 'text', text: prompt }];
+    if (imageBase64) {
+      contentArray.unshift({ type: 'image_url', image_url: { url: imageBase64 } });
+    }
+
+    const body = {
+      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
+      messages: [{ role: 'user', content: contentArray }],
+      temperature: temp
+    };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`API Error: ${res.status} - ${errText}`);
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || text;
   }
 
   throw new Error('Invalid AI provider configured.');

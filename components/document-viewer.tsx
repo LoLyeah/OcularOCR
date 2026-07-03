@@ -5,7 +5,7 @@ import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResu
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR } from '@/lib/ocr';
 import { renderPdfToCanvas } from '@/lib/pdf';
-import { summarizeText, extractTextFromImages } from '@/lib/ai';
+import { summarizeText, extractTextFromImages, correctOcrText } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
 import { getTagColors } from '@/lib/utils';
@@ -14,6 +14,12 @@ import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
 import { exportSearchablePDF } from '@/lib/pdf-export';
 import { preprocessImage } from '@/lib/preprocessing';
+import { OcrOverlay } from './ocr-overlay';
+import { RegionSelector, type RegionRect } from './region-selector';
+import { ocrRegions } from '@/lib/region-ocr';
+import { detectTables, tableToCsv, tableToMarkdown, type DetectedTable } from '@/lib/table-extract';
+import { exportDocx, exportJson, exportSrt } from '@/lib/export-formats';
+import { OcrDiffModal } from './ocr-diff-modal';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -61,6 +67,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [ocrProgressText, setOcrProgressText] = useState('');
   const [useLlmForOcr, setUseLlmForOcr] = useState(false);
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['eng']);
+  const [pdfRenderScale, setPdfRenderScale] = useState<number>(2.0);
+  const [showOcrOverlay, setShowOcrOverlay] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'preview' | 'ocr'>('preview');
@@ -69,16 +77,31 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   
   const [selectedOcrPage, setSelectedOcrPage] = useState<number>(1);
   const [ocrViewMode, setOcrViewMode] = useState<'single' | 'all'>('single');
+  const [overlayDims, setOverlayDims] = useState({ w: 0, h: 0 });
+  const [isRegionMode, setIsRegionMode] = useState(false);
+  const [regions, setRegions] = useState<RegionRect[]>([]);
+  const [regionOcrResult, setRegionOcrResult] = useState('');
+  const [detectedTables, setDetectedTables] = useState<DetectedTable[]>([]);
+  const [isDetectingTables, setIsDetectingTables] = useState(false);
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [diffCanvases, setDiffCanvases] = useState<HTMLCanvasElement[] | null>(null);
+  const [diffProps, setDiffProps] = useState<{
+    settings: AISettings;
+    languages: string;
+    prepOpts: any;
+  } | null>(null);
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<AISettings | null>(null);
   const isMobile = useIsMobile();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (isMobile) {
-      setIsCollapsed(true);
-    }
-  }, [isMobile]);
+  const [prevIsMobile, setPrevIsMobile] = useState(isMobile);
+  if (isMobile !== prevIsMobile) {
+    setPrevIsMobile(isMobile);
+    if (isMobile) setIsCollapsed(true);
+  }
 
   useEffect(() => {
     let objectUrl: string;
@@ -141,9 +164,13 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           try {
             const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
             const settings = JSON.parse(decryptedStr) as AISettings;
+            settingsRef.current = settings;
             setUseLlmForOcr(!!settings?.useLlmForOcr);
             if (settings?.ocrLanguages) {
               setSelectedLanguages(settings.ocrLanguages);
+            }
+            if (settings?.pdfRenderScale) {
+              setPdfRenderScale(settings.pdfRenderScale);
             }
           } catch (e) {
             console.error('Failed to decrypt settings for OCR check', e);
@@ -160,6 +187,21 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     };
   }, [doc, cryptoKey]);
 
+  // Update overlay dimensions when overlay, region mode, or container resizes
+  useEffect(() => {
+    if ((!showOcrOverlay && !isRegionMode) || !previewContainerRef.current) return;
+    const updateDims = () => {
+      const el = previewContainerRef.current;
+      if (el) {
+        setOverlayDims({ w: el.clientWidth, h: el.clientHeight });
+      }
+    };
+    updateDims();
+    const ro = new ResizeObserver(updateDims);
+    ro.observe(previewContainerRef.current);
+    return () => ro.disconnect();
+  }, [showOcrOverlay, isRegionMode, structuredOcr]);
+
   const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
     if (doc.type.includes('pdf')) {
       const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
@@ -167,7 +209,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         return Array.from(canvases) as HTMLCanvasElement[];
       }
       const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
-      return await renderPdfToCanvas(decryptedBuffer);
+      return await renderPdfToCanvas(decryptedBuffer, pdfRenderScale);
     } else {
       if (!fileUrl) return [];
       const img = new Image();
@@ -195,7 +237,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         settings = JSON.parse(decryptedStr);
       }
 
-      setUseLlmForOcr(!!settings?.useLlmForOcr);
+      setUseLlmForOcr(!!settings?.useLlmForOcr || !!settings?.handwritingMode);
 
       let extractedText = '';
       let finalOcrResult: StructuredOcrResult;
@@ -216,7 +258,13 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         throw new Error(language === 'id' ? "Tidak ada gambar halaman yang ditemukan." : "No page images found.");
       }
       
-      if (settings?.useLlmForOcr) {
+      const useLlm = settings?.useLlmForOcr || settings?.handwritingMode;
+
+      if (useLlm && !settings) {
+        throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
+      }
+
+      if (useLlm) {
         setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
         const imagesBase64: string[] = [];
         
@@ -232,7 +280,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
         }
         
-        extractedText = await extractTextFromImages(imagesBase64, settings);
+        extractedText = await extractTextFromImages(imagesBase64, settings!);
         finalOcrResult = {
           text: extractedText,
           pages: parseOcrPages(extractedText).map(p => ({
@@ -261,6 +309,27 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         );
         finalOcrResult = ocrResult;
         extractedText = ocrResult.text;
+
+        // Post-OCR LLM correction pass for Tesseract results
+        if (settings?.enablePostOcrCorrection) {
+          setOcrProgressText(language === 'id' ? 'Mengoreksi hasil OCR dengan AI...' : 'Correcting OCR results with AI...');
+          try {
+            const firstPageCanvas = canvases[0];
+            const firstPageBase64 = firstPageCanvas ? firstPageCanvas.toDataURL('image/jpeg', 0.8) : undefined;
+            const correctedText = await correctOcrText(extractedText, settings, firstPageBase64);
+            const correctedPages = parseOcrPages(correctedText);
+            finalOcrResult.pages.forEach((page) => {
+              const corrected = correctedPages.find(p => p.pageNumber === page.pageNumber);
+              if (corrected) {
+                page.text = corrected.text;
+              }
+            });
+            finalOcrResult.text = correctedText;
+            extractedText = correctedText;
+          } catch (e) {
+            console.error('Post-OCR correction failed, using original text', e);
+          }
+        }
       }
       
       setOcrText(extractedText);
@@ -358,8 +427,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         let settings: AISettings | undefined;
         if (encryptedSettings) {
           const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
-          settings = JSON.parse(decryptedStr);
-        }
+settings = JSON.parse(decryptedStr);
+        settingsRef.current = settings!;
+      }
         const suggestions = await suggestTags(ocrText, doc.name, settings);
         setSuggestedTags(suggestions.filter(t => !tags.includes(t)));
       } catch (err) {
@@ -520,6 +590,165 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     });
   };
 
+  const handleRegionOcr = async () => {
+    if (regions.length === 0) return;
+    setIsProcessingOcr(true);
+    setOcrProgressText(language === 'id' ? 'Memproses wilayah OCR...' : 'Processing region OCR...');
+    try {
+      const encryptedSettings = await getSettings();
+      let settings: AISettings | undefined;
+      if (encryptedSettings) {
+        const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+        settings = JSON.parse(decryptedStr);
+      }
+      const canvases = await getPageCanvases();
+      if (canvases.length === 0) return;
+      const src = canvases[0];
+      const displayW = previewContainerRef.current?.clientWidth || src.width;
+      const scaleX = src.width / displayW;
+      const scaleY = src.height / (previewContainerRef.current?.clientHeight || src.height);
+      const scaledRegions = regions.map(r => ({
+        x: Math.round(r.x * scaleX),
+        y: Math.round(r.y * scaleY),
+        width: Math.round(r.width * scaleX),
+        height: Math.round(r.height * scaleY),
+      }));
+      const language = (settings?.ocrLanguages || ['eng']).join('+') || 'eng';
+      const results = await ocrRegions(src, scaledRegions, language);
+      const combined = results.map((r, i) => `--- REGION ${i + 1} ---\n${r.text}`).join('\n\n');
+      setRegionOcrResult(combined);
+      setOcrText(combined);
+      setActiveTab('ocr');
+      toast({ title: t('regionOcrDone'), variant: "success" });
+    } catch (err: any) {
+      console.error('Region OCR failed', err);
+      setError(err.message || 'Region OCR failed');
+    } finally {
+      setIsProcessingOcr(false);
+      setOcrProgressText('');
+    }
+  };
+
+  const handleDetectTables = () => {
+    if (!structuredOcr || selectedOcrPage < 1 || selectedOcrPage > structuredOcr.pages.length) return;
+    const page = structuredOcr.pages[selectedOcrPage - 1];
+    if (!page || page.words.length === 0) {
+      toast({ title: t('noTablesFound'), variant: "info" });
+      return;
+    }
+    setIsDetectingTables(true);
+    try {
+      const tables = detectTables(page.words, page.words.reduce((m, w) => Math.max(m, w.bbox.x1), 0), page.words.reduce((m, w) => Math.max(m, w.bbox.y1), 0));
+      setDetectedTables(tables);
+      if (tables.length === 0) {
+        toast({ title: t('noTablesFound'), variant: "info" });
+      } else {
+        toast({ title: `${t('tablesDetected')}: ${tables.length}`, variant: "success" });
+      }
+    } catch (err) {
+      console.error('Table detection failed', err);
+    } finally {
+      setIsDetectingTables(false);
+    }
+  };
+
+  const exportTableCsv = () => {
+    if (detectedTables.length === 0) return;
+    const csv = detectedTables.map(t => tableToCsv(t)).join('\n\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.name}-tables.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'CSV exported', variant: "success" });
+  };
+
+  const exportTableMarkdown = () => {
+    if (detectedTables.length === 0) return;
+    const md = detectedTables.map(t => tableToMarkdown(t)).join('\n\n');
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${doc.name}-tables.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: 'Markdown exported', variant: "success" });
+  };
+
+  const handleExportDocx = async () => {
+    if (!structuredOcr) { toast({ title: 'No OCR data', variant: "error" }); return; }
+    try {
+      await exportDocx(structuredOcr, `${doc.name}-extracted.docx`);
+      toast({ title: 'DOCX exported', variant: "success" });
+    } catch (e: any) {
+      toast({ title: 'DOCX export failed', description: e.message, variant: "error" });
+    }
+  };
+
+  const handleExportJson = () => {
+    if (!structuredOcr) { toast({ title: 'No OCR data', variant: "error" }); return; }
+    exportJson(structuredOcr, `${doc.name}-ocr.json`);
+    toast({ title: 'JSON exported', variant: "success" });
+  };
+
+  const handleExportSrt = () => {
+    if (!structuredOcr) { toast({ title: 'No OCR data', variant: "error" }); return; }
+    exportSrt(structuredOcr, `${doc.name}-ocr.srt`);
+    toast({ title: 'SRT exported', variant: "success" });
+  };
+
+  const handleCompareEngines = async () => {
+    const s = settingsRef.current;
+    if (!s || s.provider === 'ollama') return;
+    try {
+      const canvases = await getPageCanvases();
+      if (canvases.length === 0) return;
+      setDiffCanvases(canvases);
+      setDiffProps({
+        settings: s,
+        languages: selectedLanguages.join('+') || 'eng',
+        prepOpts: {
+          enabled: s.enablePreprocessing ?? true,
+          grayscale: s.preprocessingGrayscale ?? true,
+          contrast: s.preprocessingContrast ?? true,
+          binarize: s.preprocessingBinarize ?? false,
+          denoise: s.preprocessingDenoise ?? true,
+          deskew: s.preprocessingDeskew ?? true,
+          rotate: s.preprocessingRotate ?? true,
+          rotationThreshold: s.rotationThreshold ?? 3.0,
+        },
+      });
+      setShowDiffModal(true);
+    } catch (e) {
+      console.error('Failed to get canvases for comparison', e);
+    }
+  };
+
+  const handleDiffModalPick = (text: string, isTesseract: boolean) => {
+    setOcrText(text);
+    if (structuredOcr) {
+      const pages = parseOcrPages(text);
+      const updatedPages = structuredOcr.pages.map(p => {
+        const found = pages.find(fp => fp.pageNumber === p.pageNumber);
+        return found ? { ...p, text: found.text } : p;
+      });
+      setStructuredOcr({ text, pages: updatedPages });
+    }
+    setShowDiffModal(false);
+    toast({
+      title: isTesseract ? 'Tesseract result applied' : 'LLM Vision result applied',
+      variant: "success"
+    });
+  };
+
+  const handleExitRegionMode = () => {
+    setIsRegionMode(false);
+    setRegions([]);
+  };
+
   const parsedOcrPagesList = parseOcrPages(ocrText);
   const activeOcrPageText = parsedOcrPagesList.find(p => p.pageNumber === selectedOcrPage)?.text || ocrText;
 
@@ -670,11 +899,77 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   transition={{ duration: 0.15 }}
                   className="min-h-[500px]"
                 >
-                  {doc.type.includes('pdf') ? (
-                    <div ref={pdfContainerRef} className="flex flex-col items-center" />
-                  ) : (
-                    fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
+                  {/* Confidence overlay toggle */}
+                  {structuredOcr && structuredOcr.pages && structuredOcr.pages.length > 0 && structuredOcr.pages[0].words.length > 0 && structuredOcr.pages[0].words[0].confidence != null && (
+                    <div className="flex justify-end mb-2">
+                      <button
+                        onClick={() => setShowOcrOverlay(!showOcrOverlay)}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded border cursor-pointer transition-colors ${
+                          showOcrOverlay
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/40 dark:border-indigo-800/40 dark:text-indigo-400'
+                            : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {showOcrOverlay ? t('hideOcrOverlay') : t('showOcrOverlay')}
+                      </button>
+                    </div>
                   )}
+                                    {/* Region mode toolbar (outside relative container for correct dimensions) */}
+                    <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                      <button
+                        onClick={() => { setIsRegionMode(!isRegionMode); if (isRegionMode) setRegions([]); }}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded border cursor-pointer transition-colors ${
+                          isRegionMode
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-600 dark:bg-indigo-950/40 dark:border-indigo-800/40 dark:text-indigo-400'
+                            : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400'
+                        }`}
+                      >
+                        {isRegionMode ? t('exitRegionMode') : t('selectRegion')}
+                      </button>
+                      {isRegionMode && regions.length > 0 && (
+                        <>
+                          <button
+                            onClick={() => setRegions([])}
+                            className="px-2 py-0.5 text-[9px] font-bold rounded border border-slate-200 bg-white text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 cursor-pointer hover:bg-slate-50"
+                          >
+                            Clear
+                          </button>
+                          <button
+                            onClick={handleRegionOcr}
+                            disabled={isProcessingOcr}
+                            className="px-2 py-0.5 text-[9px] font-bold rounded bg-indigo-600 text-white border border-indigo-600 cursor-pointer hover:bg-indigo-700 disabled:opacity-50"
+                          >
+                            {t('ocrRegion')} ({regions.length})
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div ref={previewContainerRef} className="relative">
+                    {doc.type.includes('pdf') ? (
+                      <div ref={pdfContainerRef} className="flex flex-col items-center" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />
+                    )}
+                    {isRegionMode && overlayDims.w > 0 && (
+                      <RegionSelector
+                        width={overlayDims.w}
+                        height={overlayDims.h}
+                        regions={regions}
+                        onRegionsChange={setRegions}
+                        active={isRegionMode}
+                      />
+                    )}
+                    {showOcrOverlay && structuredOcr && structuredOcr.pages && structuredOcr.pages.length > 0 && overlayDims.w > 0 && (
+                      <OcrOverlay
+                        pageData={structuredOcr.pages[0]}
+                        containerWidth={overlayDims.w}
+                        containerHeight={overlayDims.h}
+                        imageWidth={overlayDims.w}
+                        imageHeight={overlayDims.h}
+                      />
+                    )}
+                  </div>
                 </motion.div>
               ) : (
                 <motion.div
@@ -723,6 +1018,15 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                             <RefreshCw className="h-3 w-3 text-indigo-500" />
                             {language === 'id' ? 'Ekstrak Ulang' : 'Redo OCR'}
                           </button>
+                          {!useLlmForOcr && ocrText && (
+                            <button
+                              onClick={handleCompareEngines}
+                              className="px-2.5 py-1 text-[10.5px] font-bold rounded border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              {t('compareEngines')}
+                            </button>
+                          )}
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-2">
@@ -742,6 +1046,27 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                             MD
                           </button>
                           <button
+                            onClick={handleExportDocx}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            {t('exportDocx')}
+                          </button>
+                          <button
+                            onClick={handleExportSrt}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            {t('exportSrt')}
+                          </button>
+                          <button
+                            onClick={handleExportJson}
+                            className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Download className="h-3 w-3" />
+                            {t('exportJson')}
+                          </button>
+                          <button
                             onClick={() => handleExportPdf('searchable')}
                             disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length}
                             className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-50/10 border border-indigo-200 dark:border-indigo-800/40 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
@@ -757,6 +1082,37 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                             <Download className="h-3 w-3" />
                             {language === 'id' ? 'PDF Teks Saja' : 'Text-only PDF'}
                           </button>
+                          {/* Table detection */}
+                          {structuredOcr && structuredOcr.pages && structuredOcr.pages.length > 0 && structuredOcr.pages[selectedOcrPage - 1]?.words?.length > 0 && (
+                            <>
+                              <button
+                                onClick={handleDetectTables}
+                                disabled={isDetectingTables}
+                                className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors disabled:opacity-40"
+                              >
+                                {isDetectingTables ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                                {t('detectTables')}
+                              </button>
+                              {detectedTables.length > 0 && (
+                                <>
+                                  <button
+                                    onClick={exportTableCsv}
+                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    CSV
+                                  </button>
+                                  <button
+                                    onClick={exportTableMarkdown}
+                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                    MD
+                                  </button>
+                                </>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
 
@@ -1039,6 +1395,17 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           </div>
         </motion.div>
       </div>
+
+      {showDiffModal && diffCanvases && diffProps && (
+        <OcrDiffModal
+          canvases={diffCanvases}
+          settings={diffProps.settings}
+          languages={diffProps.languages}
+          prepOpts={diffProps.prepOpts}
+          onClose={() => { setShowDiffModal(false); setDiffCanvases(null); setDiffProps(null); }}
+          onPickResult={handleDiffModalPick}
+        />
+      )}
     </motion.div>
   );
 }

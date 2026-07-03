@@ -81,6 +81,7 @@ export const translationDict: Translations = {
   // Settings Modal - General
   aiSettingsTab: { en: 'AI Processing', id: 'Pemrosesan AI' },
   appearanceSettingsTab: { en: 'Appearance', id: 'Tampilan' },
+  offlineSettingsTab: { en: 'Local OCR', id: 'OCR Lokal' },
   systemSettingsTab: { en: 'System & Security', id: 'Sistem & Keamanan' },
   saveSettingsBtn: { en: 'Save Settings', id: 'Simpan Pengaturan' },
   savingSettingsToast: { en: 'Saving settings...', id: 'Menyimpan pengaturan...' },

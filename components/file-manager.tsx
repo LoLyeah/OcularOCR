@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe } from 'lucide-react';
-import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings } from '@/lib/storage';
+import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
-import { renderPdfToCanvas } from '@/lib/pdf';
-import { performOCR } from '@/lib/ocr';
+import { renderPdfToCanvas, renderPdfPageToCanvas, getPdfPageCount } from '@/lib/pdf';
+import { performOCR, performPdfOCR } from '@/lib/ocr';
 import { extractTextFromImages, extractStructuredFromImages, StructuredOcrUnsupportedError, VisionModelUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import { getTagColors } from '@/lib/utils';
@@ -575,9 +575,72 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             rotationThreshold: settings?.rotationThreshold ?? 3.0
           };
 
-          let canvases: HTMLCanvasElement[] = [];
           if (doc.type.includes('pdf')) {
-            canvases = await renderPdfToCanvas(decryptedBuffer);
+            const pageCount = await getPdfPageCount(decryptedBuffer);
+            const renderScale = settings?.pdfRenderScale ?? 2.0;
+
+            if (settings?.useLlmForOcr) {
+              const pagesData: any[] = [];
+              const useStructured = settings?.structuredLlmOcr;
+
+              for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+                const canvas = await renderPdfPageToCanvas(decryptedBuffer, pageNum, renderScale);
+                const imgBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                const w = canvas.width;
+                const h = canvas.height;
+                canvas.width = 0;
+                canvas.height = 0;
+
+                if (useStructured) {
+                  try {
+                    const pageDimensions = [{ width: w, height: h }];
+                    const structuredRes = await extractStructuredFromImages([imgBase64], settings!, pageDimensions);
+                    const pageObj = structuredRes.pages[0];
+                    if (pageObj) {
+                      pageObj.pageNumber = pageNum;
+                      pagesData.push(pageObj);
+                    }
+                  } catch (err) {
+                    if (err instanceof StructuredOcrUnsupportedError) {
+                      const text = await extractTextFromImages([imgBase64], settings!);
+                      pagesData.push({
+                        pageNumber: pageNum,
+                        text,
+                        words: []
+                      });
+                    } else {
+                      throw err;
+                    }
+                  }
+                } else {
+                  const text = await extractTextFromImages([imgBase64], settings!);
+                  pagesData.push({
+                    pageNumber: pageNum,
+                    text,
+                    words: []
+                  });
+                }
+              }
+
+              pagesData.sort((a, b) => a.pageNumber - b.pageNumber);
+              finalOcrText = pagesData.map((p) => {
+                if (pageCount > 1) {
+                  return `--- PAGE ${p.pageNumber} ---\n${p.text}`;
+                }
+                return p.text;
+              }).join('\n\n') + '\n\n';
+
+              const structuredResult: StructuredOcrResult = {
+                text: finalOcrText,
+                pages: pagesData
+              };
+              ocrResultToSave = JSON.stringify(structuredResult);
+            } else {
+              const languages = settings?.ocrLanguages?.join('+') || 'eng';
+              const ocrResult = await performPdfOCR(decryptedBuffer, languages, prepOpts, renderScale);
+              finalOcrText = ocrResult.text;
+              ocrResultToSave = JSON.stringify(ocrResult);
+            }
           } else {
             const blob = new Blob([decryptedBuffer], { type: doc.type });
             const url = URL.createObjectURL(blob);
@@ -589,51 +652,42 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             canvas.height = img.height;
             canvas.getContext('2d')?.drawImage(img, 0, 0);
             URL.revokeObjectURL(url);
-            canvases = [canvas];
-          }
+            
+            const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
 
-          if (settings?.useLlmForOcr) {
-            const imagesBase64 = canvases.map(c => c.toDataURL('image/jpeg', 0.8));
-
-            if (settings?.structuredLlmOcr) {
-              try {
-                const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
-                const structuredResult = await extractStructuredFromImages(imagesBase64, settings, pageDimensions);
-                finalOcrText = structuredResult.text;
-                ocrResultToSave = JSON.stringify(structuredResult);
-              } catch (err) {
-                if (err instanceof StructuredOcrUnsupportedError) {
-                  finalOcrText = await extractTextFromImages(imagesBase64, settings);
-                  const parsedResult = {
-                    text: finalOcrText,
-                    pages: parseOcrPages(finalOcrText).map(p => ({
-                      pageNumber: p.pageNumber,
-                      text: p.text,
-                      words: []
-                    }))
-                  };
-                  ocrResultToSave = JSON.stringify(parsedResult);
-                } else {
-                  throw err;
+            if (settings?.useLlmForOcr) {
+              if (settings?.structuredLlmOcr) {
+                try {
+                  const pageDimensions = [{ width: canvas.width, height: canvas.height }];
+                  const structuredResult = await extractStructuredFromImages([imageBase64], settings, pageDimensions);
+                  finalOcrText = structuredResult.text;
+                  ocrResultToSave = JSON.stringify(structuredResult);
+                } catch (err) {
+                  if (err instanceof StructuredOcrUnsupportedError) {
+                    finalOcrText = await extractTextFromImages([imageBase64], settings);
+                    const parsedResult = {
+                      text: finalOcrText,
+                      pages: [{ pageNumber: 1, text: finalOcrText, words: [] }]
+                    };
+                    ocrResultToSave = JSON.stringify(parsedResult);
+                  } else {
+                    throw err;
+                  }
                 }
+              } else {
+                finalOcrText = await extractTextFromImages([imageBase64], settings);
+                const parsedResult = {
+                  text: finalOcrText,
+                  pages: [{ pageNumber: 1, text: finalOcrText, words: [] }]
+                };
+                ocrResultToSave = JSON.stringify(parsedResult);
               }
             } else {
-              finalOcrText = await extractTextFromImages(imagesBase64, settings);
-              const parsedResult = {
-                text: finalOcrText,
-                pages: parseOcrPages(finalOcrText).map(p => ({
-                  pageNumber: p.pageNumber,
-                  text: p.text,
-                  words: []
-                }))
-              };
-              ocrResultToSave = JSON.stringify(parsedResult);
+              const languages = settings?.ocrLanguages?.join('+') || 'eng';
+              const ocrResult = await performOCR([canvas], languages, prepOpts);
+              finalOcrText = ocrResult.text;
+              ocrResultToSave = JSON.stringify(ocrResult);
             }
-          } else {
-            const languages = settings?.ocrLanguages?.join('+') || 'eng';
-            const ocrResult = await performOCR(canvases, languages, prepOpts);
-            finalOcrText = ocrResult.text;
-            ocrResultToSave = JSON.stringify(ocrResult);
           }
 
           const { encrypted, iv } = await encryptString(ocrResultToSave, cryptoKey);

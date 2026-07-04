@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
-import { performOCR } from '@/lib/ocr';
-import { renderPdfToCanvas } from '@/lib/pdf';
+import { performOCR, performPdfOCR } from '@/lib/ocr';
+import { renderPdfToCanvas, renderPdfPageToCanvas, getPdfPageCount } from '@/lib/pdf';
 import { summarizeText, extractTextFromImages, correctOcrText, extractStructuredFromImages, StructuredOcrUnsupportedError, VisionModelUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
@@ -96,10 +96,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [localPrepOpts, setLocalPrepOpts] = useState<PreprocessingOptions | null>(null);
   const [previewMode, setPreviewMode] = useState<'before' | 'after' | 'split'>('split');
   const [configurePage, setConfigurePage] = useState(0);
+  const [configureCanvas, setConfigureCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [configureTotalPages, setConfigureTotalPages] = useState<number>(1);
   const [prepMode, setPrepMode] = useState<'auto' | 'manual' | 'off'>('auto');
   const [previewProcessedUrl, setPreviewProcessedUrl] = useState<string | null>(null);
   const [qualityEstimate, setQualityEstimate] = useState<ImageQuality | null>(null);
-  const [originalCanvases, setOriginalCanvases] = useState<HTMLCanvasElement[]>([]);
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(0);
+  const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
   const pendingPrepOptsRef = useRef<PreprocessingOptions | null>(null);
   
   const pdfContainerRef = useRef<HTMLDivElement>(null);
@@ -124,16 +128,10 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         objectUrl = URL.createObjectURL(blob);
         
         if (doc.type.includes('pdf')) {
-          const canvases = await renderPdfToCanvas(decryptedBuffer);
-          if (pdfContainerRef.current) {
-            pdfContainerRef.current.innerHTML = '';
-            canvases.forEach(canvas => {
-              canvas.style.width = '100%';
-              canvas.style.marginBottom = '16px';
-              canvas.style.borderRadius = '8px';
-              pdfContainerRef.current?.appendChild(canvas);
-            });
-          }
+          setPdfBuffer(decryptedBuffer);
+          const count = await getPdfPageCount(decryptedBuffer);
+          setPdfTotalPages(count);
+          setPdfCurrentPage(0);
         } else {
           setFileUrl(objectUrl);
         }
@@ -199,10 +197,43 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   }, [doc, cryptoKey]);
 
   // Update overlay dimensions when overlay, region mode, or container resizes
+  // Render single PDF page on load or page/scale changes
+  useEffect(() => {
+    if (!pdfBuffer || !doc.type.includes('pdf') || !pdfContainerRef.current) return;
+    
+    let cancelled = false;
+    async function renderPage() {
+      try {
+        const canvas = await renderPdfPageToCanvas(pdfBuffer!, pdfCurrentPage + 1, pdfRenderScale);
+        if (!cancelled && pdfContainerRef.current) {
+          pdfContainerRef.current.innerHTML = '';
+          canvas.style.width = '100%';
+          canvas.style.borderRadius = '8px';
+          pdfContainerRef.current.appendChild(canvas);
+          
+          // Wait for display dimensions
+          setTimeout(() => {
+            if (!cancelled) {
+              setOverlayDims({ w: canvas.clientWidth || canvas.width, h: canvas.clientHeight || canvas.height });
+            }
+          }, 50);
+        }
+      } catch (err) {
+        console.error('Failed to render PDF page', err);
+      }
+    }
+    renderPage();
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfBuffer, pdfCurrentPage, pdfRenderScale, doc.type]);
+
+  // Update overlay dimensions when container resizes
   useEffect(() => {
     if ((!showOcrOverlay && !isRegionMode) || !previewContainerRef.current) return;
     const updateDims = () => {
-      const el = previewContainerRef.current;
+      const canvasEl = pdfContainerRef.current?.querySelector('canvas');
+      const el = canvasEl || previewContainerRef.current;
       if (el) {
         setOverlayDims({ w: el.clientWidth, h: el.clientHeight });
       }
@@ -211,30 +242,65 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     const ro = new ResizeObserver(updateDims);
     ro.observe(previewContainerRef.current);
     return () => ro.disconnect();
-  }, [showOcrOverlay, isRegionMode, structuredOcr]);
+  }, [showOcrOverlay, isRegionMode, structuredOcr, pdfCurrentPage]);
+
+  // Load canvas for the configure panel dynamically
+  useEffect(() => {
+    if (ocrStage !== 'configure') {
+      return;
+    }
+    let cancelled = false;
+    async function loadConfigureCanvas() {
+      try {
+        if (doc.type.includes('pdf')) {
+          if (pdfBuffer) {
+            const canvas = await renderPdfPageToCanvas(pdfBuffer, configurePage + 1, pdfRenderScale);
+            if (!cancelled) {
+              setConfigureCanvas(canvas);
+            }
+          }
+        } else {
+          if (fileUrl) {
+            const img = new Image();
+            img.src = fileUrl;
+            await new Promise((resolve) => { img.onload = resolve; });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.drawImage(img, 0, 0);
+            if (!cancelled) {
+              setConfigureCanvas(canvas);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load configure canvas', err);
+      }
+    }
+    loadConfigureCanvas();
+    return () => {
+      cancelled = true;
+    };
+  }, [ocrStage, configurePage, pdfBuffer, fileUrl, pdfRenderScale, doc.type]);
 
   // Live preview processing for configure panel
   useEffect(() => {
     let cancelled = false;
-    const canvas = originalCanvases[configurePage] || originalCanvases[0];
-    if (!canvas || ocrStage !== 'configure' || !localPrepOpts) {
+    if (!configureCanvas || ocrStage !== 'configure' || !localPrepOpts) {
       return () => { cancelled = true; };
     }
     const timer = setTimeout(async () => {
-      const result = await preprocessImage(canvas, localPrepOpts);
+      const result = await preprocessImage(configureCanvas, localPrepOpts);
       if (!cancelled) {
         setPreviewProcessedUrl(result.canvas.toDataURL('image/jpeg', 0.92));
       }
     }, 150);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [ocrStage, localPrepOpts, configurePage, originalCanvases]);
+  }, [ocrStage, localPrepOpts, configureCanvas]);
 
   const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
     if (doc.type.includes('pdf')) {
-      const canvases = pdfContainerRef.current?.querySelectorAll('canvas');
-      if (canvases && canvases.length > 0) {
-        return Array.from(canvases) as HTMLCanvasElement[];
-      }
       const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
       return await renderPdfToCanvas(decryptedBuffer, pdfRenderScale);
     } else {
@@ -277,109 +343,178 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         binarize: settings?.preprocessingBinarize ?? false,
         denoise: settings?.preprocessingDenoise ?? false,
         deskew: settings?.preprocessingDeskew ?? false,
-        rotate: settings?.preprocessingRotate ?? true,
+      rotate: settings?.preprocessingRotate ?? true,
         rotationThreshold: settings?.rotationThreshold ?? 3.0
       };
       pendingPrepOptsRef.current = null;
 
-      const canvases = await getPageCanvases();
-      if (canvases.length === 0) {
-        throw new Error(language === 'id' ? "Tidak ada gambar halaman yang ditemukan." : "No page images found.");
-      }
-      
       const useLlm = settings?.useLlmForOcr || settings?.handwritingMode;
 
       if (useLlm && !settings) {
         throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
       }
 
-      if (useLlm) {
-        setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
-        const imagesBase64: string[] = [];
+      if (doc.type.includes('pdf')) {
+        if (useLlm) {
+          setOcrProgressText(language === 'id' ? 'Memulai OCR bertenaga AI...' : 'Starting AI-powered OCR...');
+          const pagesData: any[] = [];
+          const useStructured = settings?.structuredLlmOcr;
 
-        for (const canvas of canvases) {
-          imagesBase64.push(canvas.toDataURL('image/jpeg', 0.8));
-        }
+          for (let pageNum = 1; pageNum <= pdfTotalPages; pageNum++) {
+            setOcrProgressText(
+              language === 'id'
+                ? `Mengirim halaman ${pageNum}/${pdfTotalPages} ke AI...`
+                : `Sending page ${pageNum}/${pdfTotalPages} to AI...`
+            );
+            
+            const canvas = await renderPdfPageToCanvas(pdfBuffer!, pageNum, pdfRenderScale);
+            const imgBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            const w = canvas.width;
+            const h = canvas.height;
+            canvas.width = 0;
+            canvas.height = 0;
 
-        // Use structured OCR if enabled
-        const useStructured = settings?.structuredLlmOcr;
-        if (useStructured) {
-          try {
-            const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
-            finalOcrResult = await extractStructuredFromImages(imagesBase64, settings!, pageDimensions);
-            extractedText = finalOcrResult.text;
-          } catch (err) {
-            if (err instanceof StructuredOcrUnsupportedError) {
-              toast({
-                title: language === 'id' ? 'Peringatan OCR Terstruktur' : 'Structured OCR Warning',
-                description: err.message,
-                variant: "info"
-              });
-              // Fall back to plain text extraction
-              extractedText = await extractTextFromImages(imagesBase64, settings!);
-              finalOcrResult = {
-                text: extractedText,
-                pages: parseOcrPages(extractedText).map(p => ({
-                  pageNumber: p.pageNumber,
-                  text: p.text,
-                  words: []
-                }))
-              };
+            if (useStructured) {
+              try {
+                const pageDimensions = [{ width: w, height: h }];
+                const structuredRes = await extractStructuredFromImages([imgBase64], settings!, pageDimensions);
+                const pageObj = structuredRes.pages[0];
+                if (pageObj) {
+                  pageObj.pageNumber = pageNum;
+                  pagesData.push(pageObj);
+                }
+              } catch (err) {
+                if (err instanceof StructuredOcrUnsupportedError) {
+                  const text = await extractTextFromImages([imgBase64], settings!);
+                  pagesData.push({
+                    pageNumber: pageNum,
+                    text,
+                    words: []
+                  });
+                } else {
+                  throw err;
+                }
+              }
             } else {
-              throw err;
+              const text = await extractTextFromImages([imgBase64], settings!);
+              pagesData.push({
+                pageNumber: pageNum,
+                text,
+                words: []
+              });
             }
           }
-        } else {
-          extractedText = await extractTextFromImages(imagesBase64, settings!);
+
+          pagesData.sort((a, b) => a.pageNumber - b.pageNumber);
+          extractedText = pagesData.map((p) => {
+            if (pdfTotalPages > 1) {
+              return `--- PAGE ${p.pageNumber} ---\n${p.text}`;
+            }
+            return p.text;
+          }).join('\n\n') + '\n\n';
+
           finalOcrResult = {
             text: extractedText,
-            pages: parseOcrPages(extractedText).map(p => ({
-              pageNumber: p.pageNumber,
-              text: p.text,
-              words: []
-            }))
+            pages: pagesData
           };
+        } else {
+          const languages = selectedLanguages.join('+') || 'eng';
+          finalOcrResult = await performPdfOCR(
+            pdfBuffer!,
+            languages,
+            prepOpts,
+            pdfRenderScale,
+            (pageIndex, progress) => {
+              const pageNum = pageIndex + 1;
+              const percent = Math.round(progress * 100);
+              setOcrProgressText(
+                language === 'id' 
+                  ? `Memproses Halaman ${pageNum}/${pdfTotalPages} (${percent}%)` 
+                  : `Processing Page ${pageNum}/${pdfTotalPages} (${percent}%)`
+              );
+            }
+          );
+          extractedText = finalOcrResult.text;
         }
       } else {
-        const languages = selectedLanguages.join('+') || 'eng';
-        const total = canvases.length;
+        const canvases = await getPageCanvases();
+        if (canvases.length === 0) {
+          throw new Error(language === 'id' ? "Tidak ada gambar halaman yang ditemukan." : "No page images found.");
+        }
         
-        const ocrResult = await performOCR(
-          canvases,
-          languages,
-          prepOpts,
-          (pageIndex, progress) => {
-            const pageNum = pageIndex + 1;
-            const percent = Math.round(progress * 100);
-            setOcrProgressText(
-              language === 'id' 
-                ? `Memproses Halaman ${pageNum}/${total} (${percent}%)` 
-                : `Processing Page ${pageNum}/${total} (${percent}%)`
-            );
-          }
-        );
-        finalOcrResult = ocrResult;
-        extractedText = ocrResult.text;
-
-        // Post-OCR LLM correction pass for Tesseract results
-        if (settings?.enablePostOcrCorrection) {
-          setOcrProgressText(language === 'id' ? 'Mengoreksi hasil OCR dengan AI...' : 'Correcting OCR results with AI...');
-          try {
-            const firstPageCanvas = canvases[0];
-            const firstPageBase64 = firstPageCanvas ? firstPageCanvas.toDataURL('image/jpeg', 0.8) : undefined;
-            const correctedText = await correctOcrText(extractedText, settings, firstPageBase64);
-            const correctedPages = parseOcrPages(correctedText);
-            finalOcrResult.pages.forEach((page) => {
-              const corrected = correctedPages.find(p => p.pageNumber === page.pageNumber);
-              if (corrected) {
-                page.text = corrected.text;
+        if (useLlm) {
+          setOcrProgressText(language === 'id' ? 'Mengirim gambar ke AI...' : 'Sending images to AI...');
+          const imgBase64 = canvases[0].toDataURL('image/jpeg', 0.8);
+          const useStructured = settings?.structuredLlmOcr;
+          if (useStructured) {
+            try {
+              const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
+              finalOcrResult = await extractStructuredFromImages([imgBase64], settings!, pageDimensions);
+              extractedText = finalOcrResult.text;
+            } catch (err) {
+              if (err instanceof StructuredOcrUnsupportedError) {
+                extractedText = await extractTextFromImages([imgBase64], settings!);
+                finalOcrResult = {
+                  text: extractedText,
+                  pages: [{ pageNumber: 1, text: extractedText, words: [] }]
+                };
+              } else {
+                throw err;
               }
-            });
-            finalOcrResult.text = correctedText;
-            extractedText = correctedText;
-          } catch (e) {
-            console.error('Post-OCR correction failed, using original text', e);
+            }
+          } else {
+            extractedText = await extractTextFromImages([imgBase64], settings!);
+            finalOcrResult = {
+              text: extractedText,
+              pages: [{ pageNumber: 1, text: extractedText, words: [] }]
+            };
           }
+        } else {
+          const languages = selectedLanguages.join('+') || 'eng';
+          finalOcrResult = await performOCR(
+            canvases,
+            languages,
+            prepOpts,
+            (pageIndex, progress) => {
+              const percent = Math.round(progress * 100);
+              setOcrProgressText(
+                language === 'id' 
+                  ? `Memproses Halaman (${percent}%)` 
+                  : `Processing Page (${percent}%)`
+              );
+            }
+          );
+          extractedText = finalOcrResult.text;
+        }
+      }
+
+      // Post-OCR LLM correction pass for Tesseract results
+      if (!useLlm && settings?.enablePostOcrCorrection) {
+        setOcrProgressText(language === 'id' ? 'Mengoreksi hasil OCR dengan AI...' : 'Correcting OCR results with AI...');
+        try {
+          let firstPageBase64: string | undefined;
+          if (doc.type.includes('pdf')) {
+            const canvas = await renderPdfPageToCanvas(pdfBuffer!, 1, pdfRenderScale);
+            firstPageBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            canvas.width = 0;
+            canvas.height = 0;
+          } else {
+            const canvases = await getPageCanvases();
+            firstPageBase64 = canvases[0]?.toDataURL('image/jpeg', 0.8);
+          }
+          
+          const correctedText = await correctOcrText(extractedText, settings, firstPageBase64);
+          const correctedPages = parseOcrPages(correctedText);
+          finalOcrResult.pages.forEach((page) => {
+            const corrected = correctedPages.find(p => p.pageNumber === page.pageNumber);
+            if (corrected) {
+              page.text = corrected.text;
+            }
+          });
+          finalOcrResult.text = correctedText;
+          extractedText = correctedText;
+        } catch (e) {
+          console.error('Post-OCR correction failed, using original text', e);
         }
       }
       
@@ -434,13 +569,6 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
 
   const startConfigure = async () => {
     try {
-      const canvases = await getPageCanvases();
-      if (canvases.length === 0) {
-        toast({ title: language === 'id' ? 'Tidak ada halaman ditemukan' : 'No pages found', variant: 'error' });
-        return;
-      }
-      setOriginalCanvases(canvases);
-
       const encryptedSettings = await getSettings();
       let settings: AISettings | undefined;
       if (encryptedSettings) {
@@ -448,9 +576,32 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         settings = JSON.parse(decryptedStr);
       }
 
-      const quality = estimateImageQuality(
-        canvases[0].getContext('2d')!.getImageData(0, 0, canvases[0].width, canvases[0].height)
-      );
+      let quality: ImageQuality | null = null;
+      try {
+        let sampleCanvas: HTMLCanvasElement;
+        if (doc.type.includes('pdf')) {
+          sampleCanvas = await renderPdfPageToCanvas(pdfBuffer!, 1, pdfRenderScale);
+        } else {
+          const img = new Image();
+          img.src = fileUrl!;
+          await new Promise((resolve) => { img.onload = resolve; });
+          sampleCanvas = document.createElement('canvas');
+          sampleCanvas.width = img.width;
+          sampleCanvas.height = img.height;
+          const ctx = sampleCanvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0);
+        }
+        quality = estimateImageQuality(
+          sampleCanvas.getContext('2d')!.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height)
+        );
+        if (doc.type.includes('pdf')) {
+          sampleCanvas.width = 0;
+          sampleCanvas.height = 0;
+        }
+      } catch (qErr) {
+        console.error('Failed to estimate quality', qErr);
+      }
+
       setQualityEstimate(quality);
 
       setLocalPrepOpts({
@@ -466,6 +617,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       });
       setPrepMode('auto');
       setConfigurePage(0);
+      setConfigureTotalPages(doc.type.includes('pdf') ? pdfTotalPages : 1);
       setOcrStage('configure');
     } catch (err: any) {
       console.error('Configure start failed', err);
@@ -477,6 +629,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     if (!localPrepOpts) return;
     pendingPrepOptsRef.current = localPrepOpts;
     setOcrStage('running');
+    setConfigureCanvas(null);
     handleRunOcr();
   };
 
@@ -485,7 +638,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     setLocalPrepOpts(null);
     setPreviewProcessedUrl(null);
     setQualityEstimate(null);
-    setOriginalCanvases([]);
+    setConfigureCanvas(null);
   };
 
   const handleSummarize = async () => {
@@ -1024,6 +1177,29 @@ settings = JSON.parse(decryptedStr);
                         </>
                       )}
                     </div>
+                    {doc.type.includes('pdf') && pdfTotalPages > 1 && (
+                      <div className="flex items-center justify-center gap-4 mb-3 bg-white dark:bg-slate-900 py-1.5 px-3 rounded border border-slate-200 dark:border-slate-800/80 shadow-sm w-full max-w-xs mx-auto shrink-0">
+                        <button
+                          disabled={pdfCurrentPage === 0}
+                          onClick={() => setPdfCurrentPage(p => Math.max(0, p - 1))}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer transition-colors"
+                          title="Previous Page"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                          {language === 'id' ? `Halaman ${pdfCurrentPage + 1}/${pdfTotalPages}` : `Page ${pdfCurrentPage + 1}/${pdfTotalPages}`}
+                        </span>
+                        <button
+                          disabled={pdfCurrentPage >= pdfTotalPages - 1}
+                          onClick={() => setPdfCurrentPage(p => Math.min(pdfTotalPages - 1, p + 1))}
+                          className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 cursor-pointer transition-colors"
+                          title="Next Page"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
                     <div ref={previewContainerRef} className="relative">
                     {doc.type.includes('pdf') ? (
                       <div ref={pdfContainerRef} className="flex flex-col items-center" />
@@ -1040,9 +1216,9 @@ settings = JSON.parse(decryptedStr);
                         active={isRegionMode}
                       />
                     )}
-                    {showOcrOverlay && structuredOcr && structuredOcr.pages && structuredOcr.pages.length > 0 && overlayDims.w > 0 && (
+                    {showOcrOverlay && structuredOcr && structuredOcr.pages && structuredOcr.pages.length > pdfCurrentPage && overlayDims.w > 0 && (
                       <OcrOverlay
-                        pageData={structuredOcr.pages[0]}
+                        pageData={structuredOcr.pages[pdfCurrentPage]}
                         containerWidth={overlayDims.w}
                         containerHeight={overlayDims.h}
                         imageWidth={overlayDims.w}
@@ -1236,18 +1412,18 @@ settings = JSON.parse(decryptedStr);
             </AnimatePresence>
           </div>
           
-          {ocrStage === 'configure' && localPrepOpts && originalCanvases.length > 0 && (
+          {ocrStage === 'configure' && localPrepOpts && configureCanvas && (
             <div className="mx-auto mt-3 max-w-4xl">
-              <div className="rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
+               <div className="rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-sm">
                 {/* Preview canvases */}
-                <div className="flex items-center justify-center gap-2 mb-3">
+                 <div className="flex items-center justify-center gap-2 mb-3">
                   {previewMode === 'before' || previewMode === 'split' ? (
                     <div className="flex-1 text-center">
                       <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">{t('previewBefore')}</p>
                       <canvas
                         ref={(el) => {
-                          if (el && originalCanvases[configurePage]) {
-                            const src = originalCanvases[configurePage];
+                          if (el && configureCanvas) {
+                            const src = configureCanvas;
                             el.width = Math.min(src.width, 320);
                             el.height = Math.round(src.height * (Math.min(src.width, 320) / src.width));
                             const ctx = el.getContext('2d');
@@ -1289,7 +1465,7 @@ settings = JSON.parse(decryptedStr);
                       </button>
                     ))}
                   </div>
-                  {originalCanvases.length > 1 && (
+                  {configureTotalPages > 1 && (
                     <div className="flex items-center gap-1">
                       <button
                         disabled={configurePage === 0}
@@ -1299,11 +1475,11 @@ settings = JSON.parse(decryptedStr);
                         <ChevronLeft className="h-3 w-3" />
                       </button>
                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                        {language === 'id' ? `Halaman ${configurePage + 1}/${originalCanvases.length}` : `Page ${configurePage + 1}/${originalCanvases.length}`}
+                        {language === 'id' ? `Halaman ${configurePage + 1}/${configureTotalPages}` : `Page ${configurePage + 1}/${configureTotalPages}`}
                       </span>
                       <button
-                        disabled={configurePage >= originalCanvases.length - 1}
-                        onClick={() => setConfigurePage(p => Math.min(originalCanvases.length - 1, p + 1))}
+                        disabled={configurePage >= configureTotalPages - 1}
+                        onClick={() => setConfigurePage(p => Math.min(configureTotalPages - 1, p + 1))}
                         className="p-0.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 disabled:opacity-30 cursor-pointer"
                       >
                         <ChevronRight className="h-3 w-3" />

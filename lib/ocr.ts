@@ -4,6 +4,7 @@ import { preprocessImage, PreprocessingOptions, rotateCanvas } from './preproces
 import { StructuredOcrResult } from './storage';
 import { parseHocr } from './hocr-parse';
 
+
 async function autoRotateCanvasIfNeeded(
   canvas: HTMLCanvasElement,
   language: string,
@@ -201,3 +202,136 @@ export async function performOCR(
     pages
   };
 }
+
+export async function performPdfOCR(
+  pdfData: ArrayBuffer,
+  language: string = 'eng',
+  options?: PreprocessingOptions,
+  pdfRenderScale: number = 2.0,
+  onProgress?: (pageIndex: number, progress: number) => void
+): Promise<StructuredOcrResult> {
+  const pdfjsLib = await import('pdfjs-dist');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+
+  const pages: any[] = [];
+  let concatenatedText = '';
+
+  const prepOpts = options || {
+    enabled: false,
+    grayscale: false,
+    contrast: false,
+    binarize: false,
+    denoise: false,
+    deskew: false,
+    rotate: false
+  };
+
+  const requestedLangs = language.split('+');
+  const allAreBundled = requestedLangs.every(l => l === 'eng' || l === 'ind');
+
+  const batchSize = 4;
+  for (let startPage = 1; startPage <= numPages; startPage += batchSize) {
+    const endPage = Math.min(startPage + batchSize - 1, numPages);
+    const batchPromises = [];
+
+    for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
+      const pageIndex = pageNum - 1;
+      
+      const processPage = async () => {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: pdfRenderScale });
+        const canvas = document.createElement('canvas');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error(`Could not get 2D context for page ${pageNum}`);
+        
+        await page.render({ canvasContext: context, viewport } as any).promise;
+
+        const prepRes = await preprocessImage(canvas, prepOpts);
+        let finalCanvas = prepRes.canvas;
+
+        if (prepOpts.enabled && prepOpts.rotate) {
+          try {
+            const rotationResult = await autoRotateCanvasIfNeeded(
+              finalCanvas,
+              language,
+              prepOpts.rotationThreshold ?? 3.0,
+              allAreBundled
+            );
+            finalCanvas = rotationResult.rotatedCanvas;
+          } catch (e) {
+            console.error("Auto-rotation failed for page", e);
+          }
+        }
+
+        if (onProgress) onProgress(pageIndex, 0.2);
+        
+        const results = await ocrPool.performOCR([finalCanvas], language, (idx, prog) => {
+          if (onProgress) onProgress(pageIndex, prog);
+        });
+        
+        const tesseractResult = results[0];
+        const text = tesseractResult.data.text;
+        const pageWidth = finalCanvas.width;
+        const pageHeight = finalCanvas.height;
+
+        const words = (tesseractResult.data.words || []).map((w: any) => ({
+          text: w.text,
+          bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 },
+          confidence: w.conf != null ? w.conf : undefined
+        }));
+
+        let lines, blocks;
+        const hocr = tesseractResult.data.hocr;
+        if (hocr && pageWidth > 0 && pageHeight > 0) {
+          try {
+            const parsed = parseHocr(hocr, pageWidth, pageHeight);
+            lines = parsed.lines.length > 0 ? parsed.lines : undefined;
+            blocks = parsed.blocks.length > 0 ? parsed.blocks : undefined;
+          } catch (e) {
+            console.warn(`hOCR parse failed for page ${pageNum}`, e);
+          }
+        }
+
+        // Clean up canvas memory immediately
+        canvas.width = 0;
+        canvas.height = 0;
+        finalCanvas.width = 0;
+        finalCanvas.height = 0;
+
+        return {
+          pageNumber: pageNum,
+          text,
+          words,
+          lines,
+          blocks
+        };
+      };
+
+      batchPromises.push(processPage());
+    }
+
+    const batchResults = await Promise.all(batchPromises);
+    pages.push(...batchResults);
+  }
+
+  pages.sort((a, b) => a.pageNumber - b.pageNumber);
+  pages.forEach((p) => {
+    if (numPages > 1) {
+      concatenatedText += `--- PAGE ${p.pageNumber} ---\n${p.text}\n\n`;
+    } else {
+      concatenatedText = p.text;
+    }
+  });
+
+  return {
+    text: concatenatedText,
+    pages
+  };
+}
+

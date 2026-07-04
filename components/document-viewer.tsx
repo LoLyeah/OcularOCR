@@ -1470,8 +1470,8 @@ settings = JSON.parse(decryptedStr);
                         ref={(el) => {
                           if (el && configureCanvas) {
                             const src = configureCanvas;
-                            el.width = Math.min(src.width, 320);
-                            el.height = Math.round(src.height * (Math.min(src.width, 320) / src.width));
+                            el.width = src.width;
+                            el.height = src.height;
                             const ctx = el.getContext('2d');
                             if (ctx) ctx.drawImage(src, 0, 0, el.width, el.height);
                           }

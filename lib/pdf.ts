@@ -1,6 +1,6 @@
 export async function renderPdfToCanvas(pdfData: ArrayBuffer, scale: number = 2.0): Promise<HTMLCanvasElement[]> {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
   const pdf = await loadingTask.promise;
@@ -29,7 +29,7 @@ export async function renderPdfToCanvas(pdfData: ArrayBuffer, scale: number = 2.
 
 export async function getPdfPageCount(pdfData: ArrayBuffer): Promise<number> {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
   const pdf = await loadingTask.promise;
@@ -38,7 +38,7 @@ export async function getPdfPageCount(pdfData: ArrayBuffer): Promise<number> {
 
 export async function renderPdfPageToCanvas(pdfData: ArrayBuffer, pageNum: number, scale: number = 2.0): Promise<HTMLCanvasElement> {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
   const pdf = await loadingTask.promise;

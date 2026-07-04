@@ -211,7 +211,7 @@ export async function performPdfOCR(
   onProgress?: (pageIndex: number, progress: number) => void
 ): Promise<StructuredOcrResult> {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
   const pdf = await loadingTask.promise;

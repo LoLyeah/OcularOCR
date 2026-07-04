@@ -102,6 +102,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [previewProcessedUrl, setPreviewProcessedUrl] = useState<string | null>(null);
   const [qualityEstimate, setQualityEstimate] = useState<ImageQuality | null>(null);
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [pdfDocument, setPdfDocument] = useState<any>(null);
   const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(0);
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
   const pendingPrepOptsRef = useRef<PreprocessingOptions | null>(null);
@@ -129,8 +130,12 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         
         if (doc.type.includes('pdf')) {
           setPdfBuffer(decryptedBuffer);
-          const count = await getPdfPageCount(decryptedBuffer);
-          setPdfTotalPages(count);
+          const pdfjsLib = await import('pdfjs-dist');
+          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+          const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(decryptedBuffer.slice(0)) });
+          const pdf = await loadingTask.promise;
+          setPdfDocument(pdf);
+          setPdfTotalPages(pdf.numPages);
           setPdfCurrentPage(0);
         } else {
           setFileUrl(objectUrl);
@@ -200,12 +205,21 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   // Update overlay dimensions when overlay, region mode, or container resizes
   // Render single PDF page on load or page/scale changes
   useEffect(() => {
-    if (!pdfBuffer || !doc.type.includes('pdf') || !pdfContainerRef.current) return;
+    if (!pdfDocument || !doc.type.includes('pdf') || !pdfContainerRef.current) return;
     
     let cancelled = false;
     async function renderPage() {
       try {
-        const canvas = await renderPdfPageToCanvas(pdfBuffer!, pdfCurrentPage + 1, pdfRenderScale);
+        const page = await pdfDocument.getPage(pdfCurrentPage + 1);
+        const viewport = page.getViewport({ scale: pdfRenderScale });
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Could not get 2D context');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        await page.render({ canvasContext: context, viewport } as any).promise;
+        
         if (!cancelled && pdfContainerRef.current) {
           pdfContainerRef.current.innerHTML = '';
           canvas.style.width = '100%';
@@ -228,7 +242,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => {
       cancelled = true;
     };
-  }, [pdfBuffer, pdfCurrentPage, pdfRenderScale, doc.type, toast]);
+  }, [pdfDocument, pdfCurrentPage, pdfRenderScale, doc.type, toast]);
 
   // Update overlay dimensions when container resizes
   useEffect(() => {
@@ -255,8 +269,15 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     async function loadConfigureCanvas() {
       try {
         if (doc.type.includes('pdf')) {
-          if (pdfBuffer) {
-            const canvas = await renderPdfPageToCanvas(pdfBuffer, configurePage + 1, pdfRenderScale);
+          if (pdfDocument) {
+            const page = await pdfDocument.getPage(configurePage + 1);
+            const viewport = page.getViewport({ scale: pdfRenderScale });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Could not get 2D context');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            await page.render({ canvasContext: context, viewport } as any).promise;
             if (!cancelled) {
               setConfigureCanvas(canvas);
             }
@@ -264,7 +285,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         } else {
           if (fileUrl) {
             const img = new Image();
-            img.src = fileUrl;
+            img.src = fileUrl!;
             await new Promise((resolve) => { img.onload = resolve; });
             const canvas = document.createElement('canvas');
             canvas.width = img.width;
@@ -284,7 +305,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => {
       cancelled = true;
     };
-  }, [ocrStage, configurePage, pdfBuffer, fileUrl, pdfRenderScale, doc.type]);
+  }, [ocrStage, configurePage, pdfDocument, fileUrl, pdfRenderScale, doc.type]);
 
   // Live preview processing for configure panel
   useEffect(() => {
@@ -369,7 +390,15 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                 : `Sending page ${pageNum}/${pdfTotalPages} to AI...`
             );
             
-            const canvas = await renderPdfPageToCanvas(pdfBuffer!, pageNum, pdfRenderScale);
+            const page = await pdfDocument.getPage(pageNum);
+            const viewport = page.getViewport({ scale: pdfRenderScale });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Could not get 2D context');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            await page.render({ canvasContext: context, viewport } as any).promise;
+
             const imgBase64 = canvas.toDataURL('image/jpeg', 0.8);
             const w = canvas.width;
             const h = canvas.height;
@@ -422,7 +451,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         } else {
           const languages = selectedLanguages.join('+') || 'eng';
           finalOcrResult = await performPdfOCR(
-            pdfBuffer!,
+            pdfBuffer!.slice(0),
             languages,
             prepOpts,
             pdfRenderScale,
@@ -496,7 +525,15 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         try {
           let firstPageBase64: string | undefined;
           if (doc.type.includes('pdf')) {
-            const canvas = await renderPdfPageToCanvas(pdfBuffer!, 1, pdfRenderScale);
+            const page = await pdfDocument.getPage(1);
+            const viewport = page.getViewport({ scale: pdfRenderScale });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Could not get 2D context');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            await page.render({ canvasContext: context, viewport } as any).promise;
+            
             firstPageBase64 = canvas.toDataURL('image/jpeg', 0.8);
             canvas.width = 0;
             canvas.height = 0;
@@ -582,7 +619,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       try {
         let sampleCanvas: HTMLCanvasElement;
         if (doc.type.includes('pdf')) {
-          sampleCanvas = await renderPdfPageToCanvas(pdfBuffer!, 1, pdfRenderScale);
+          const page = await pdfDocument.getPage(1);
+          const viewport = page.getViewport({ scale: pdfRenderScale });
+          sampleCanvas = document.createElement('canvas');
+          const context = sampleCanvas.getContext('2d');
+          if (!context) throw new Error('Could not get 2D context');
+          sampleCanvas.height = viewport.height;
+          sampleCanvas.width = viewport.width;
+          await page.render({ canvasContext: context, viewport } as any).promise;
         } else {
           const img = new Image();
           img.src = fileUrl!;

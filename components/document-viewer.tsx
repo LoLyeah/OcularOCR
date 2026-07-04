@@ -340,6 +340,40 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     }
   };
 
+  const callOcrWithRetry = async <T,>(
+    apiCall: () => Promise<T>,
+    pageNum: number,
+    totalPages: number,
+    maxRetries: number = 3
+  ): Promise<T> => {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await apiCall();
+      } catch (err: any) {
+        attempt++;
+        const errMsg = String(err?.message || err || '').toLowerCase();
+        const isRateLimit = errMsg.includes('429') || errMsg.includes('exhausted') || errMsg.includes('rate limit') || errMsg.includes('too many requests');
+        
+        if (isRateLimit && attempt <= maxRetries) {
+          const delayMs = Math.pow(2, attempt) * 1000;
+          const delaySec = delayMs / 1000;
+          console.warn(`Rate limit hit on page ${pageNum}. Retrying in ${delaySec}s (Attempt ${attempt}/${maxRetries})...`, err);
+          
+          setOcrProgressText(
+            language === 'id'
+              ? `Batas limit terlampaui. Mengulang halaman ${pageNum}/${totalPages} dalam ${delaySec} detik...`
+              : `Rate limit hit. Retrying page ${pageNum}/${totalPages} in ${delaySec}s...`
+          );
+          
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+        throw err;
+      }
+    }
+  };
+
   const handleRunOcr = async () => {
     setIsProcessingOcr(true);
     setOcrProgressText(language === 'id' ? 'Menyiapkan berkas...' : 'Preparing document...');
@@ -366,7 +400,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         binarize: settings?.preprocessingBinarize ?? false,
         denoise: settings?.preprocessingDenoise ?? false,
         deskew: settings?.preprocessingDeskew ?? false,
-      rotate: settings?.preprocessingRotate ?? true,
+        rotate: settings?.preprocessingRotate ?? true,
         rotationThreshold: settings?.rotationThreshold ?? 3.0
       };
       pendingPrepOptsRef.current = null;
@@ -376,40 +410,6 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       if (useLlm && !settings) {
         throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
       }
-
-      const callOcrWithRetry = async <T,>(
-        apiCall: () => Promise<T>,
-        pageNum: number,
-        totalPages: number,
-        maxRetries: number = 3
-      ): Promise<T> => {
-        let attempt = 0;
-        while (true) {
-          try {
-            return await apiCall();
-          } catch (err: any) {
-            attempt++;
-            const errMsg = String(err?.message || err || '').toLowerCase();
-            const isRateLimit = errMsg.includes('429') || errMsg.includes('exhausted') || errMsg.includes('rate limit') || errMsg.includes('too many requests');
-            
-            if (isRateLimit && attempt <= maxRetries) {
-              const delayMs = Math.pow(2, attempt) * 1000;
-              const delaySec = delayMs / 1000;
-              console.warn(`Rate limit hit on page ${pageNum}. Retrying in ${delaySec}s (Attempt ${attempt}/${maxRetries})...`, err);
-              
-              setOcrProgressText(
-                language === 'id'
-                  ? `Batas limit terlampaui. Mengulang halaman ${pageNum}/${totalPages} dalam ${delaySec} detik...`
-                  : `Rate limit hit. Retrying page ${pageNum}/${totalPages} in ${delaySec}s...`
-              );
-              
-              await new Promise(resolve => setTimeout(resolve, delayMs));
-              continue;
-            }
-            throw err;
-          }
-        }
-      };
 
       if (doc.type.includes('pdf')) {
         if (useLlm) {
@@ -658,6 +658,106 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         setError(err.message || 'OCR failed');
       }
       console.error('OCR failed', err);
+    } finally {
+      setIsProcessingOcr(false);
+      setOcrProgressText('');
+    }
+  };
+
+  const handleAiCleanUp = async () => {
+    if (!ocrText) return;
+
+    setIsProcessingOcr(true);
+    setOcrProgressText(language === 'id' ? 'Menyiapkan pembersihan AI...' : 'Preparing AI cleanup...');
+    setError(null);
+
+    try {
+      const encryptedSettings = await getSettings();
+      let settings: AISettings | undefined;
+      if (encryptedSettings) {
+        const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
+        settings = JSON.parse(decryptedStr);
+      }
+
+      if (!settings) {
+        throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
+      }
+
+      let pagesToClean = structuredOcr?.pages ? [...structuredOcr.pages] : [];
+      if (pagesToClean.length === 0) {
+        const parsedPagesList = parseOcrPages(ocrText);
+        pagesToClean = parsedPagesList.map(p => ({
+          pageNumber: p.pageNumber,
+          text: p.text,
+          words: []
+        }));
+      }
+
+      const totalPages = pagesToClean.length;
+      if (totalPages === 0) {
+        pagesToClean = [{
+          pageNumber: 1,
+          text: ocrText,
+          words: []
+        }];
+      }
+
+      for (let i = 0; i < pagesToClean.length; i++) {
+        const page = pagesToClean[i];
+        setOcrProgressText(
+          language === 'id'
+            ? `Membersihkan halaman ${page.pageNumber}/${pagesToClean.length} dengan AI...`
+            : `Cleaning up page ${page.pageNumber}/${pagesToClean.length} with AI...`
+        );
+
+        const corrected = await callOcrWithRetry(
+          () => correctOcrText(page.text, settings!),
+          page.pageNumber,
+          pagesToClean.length
+        );
+
+        page.text = corrected;
+      }
+
+      let newConcatenatedText = '';
+      pagesToClean.sort((a, b) => a.pageNumber - b.pageNumber);
+      pagesToClean.forEach((p) => {
+        if (pagesToClean.length > 1) {
+          newConcatenatedText += `--- PAGE ${p.pageNumber} ---\n${p.text}\n\n`;
+        } else {
+          newConcatenatedText = p.text;
+        }
+      });
+
+      const updatedOcrResult = {
+        text: newConcatenatedText,
+        pages: pagesToClean
+      };
+
+      const { encrypted, iv } = await encryptString(JSON.stringify(updatedOcrResult), cryptoKey);
+      const { decryptedTags, ...docToSave } = doc as any;
+      await saveDocument({
+        ...docToSave,
+        encryptedOcrText: encrypted,
+        ocrTextIv: iv,
+      });
+
+      setOcrText(newConcatenatedText);
+      setStructuredOcr(updatedOcrResult);
+
+      toast({
+        title: language === 'id' ? "Pembersihan AI Selesai" : "AI Cleanup Completed",
+        description: language === 'id' ? "Teks OCR berhasil dibersihkan dengan AI." : "OCR text successfully cleaned up with AI.",
+        variant: "success"
+      });
+    } catch (err: any) {
+      setError(err.message || 'AI Cleanup failed');
+      console.error('AI Cleanup failed', err);
+      toast({
+        title: language === 'id' ? "Pembersihan AI Gagal" : "AI Cleanup Failed",
+        description: err.message || 'An error occurred during AI cleanup.',
+        variant: "error"
+      });
     } finally {
       setIsProcessingOcr(false);
       setOcrProgressText('');
@@ -1378,14 +1478,25 @@ settings = JSON.parse(decryptedStr);
                             <RefreshCw className="h-3 w-3 text-indigo-500" />
                             {language === 'id' ? 'Ekstrak Ulang' : 'Redo OCR'}
                           </button>
-                          {!useLlmForOcr && ocrText && (
-                            <button
-                              onClick={handleCompareEngines}
-                              className="px-2.5 py-1 text-[10.5px] font-bold rounded border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
-                            >
-                              <RefreshCw className="h-3 w-3" />
-                              {t('compareEngines')}
-                            </button>
+                           {!useLlmForOcr && ocrText && (
+                            <>
+                              <button
+                                onClick={handleCompareEngines}
+                                className="px-2.5 py-1 text-[10.5px] font-bold rounded border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors flex items-center gap-1 cursor-pointer"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                {t('compareEngines')}
+                              </button>
+                              <button
+                                onClick={handleAiCleanUp}
+                                disabled={isProcessingOcr}
+                                className="px-2.5 py-1 text-[10.5px] font-bold rounded border border-purple-200 dark:border-purple-800/40 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/60 disabled:opacity-40 transition-colors flex items-center gap-1 cursor-pointer"
+                                title={language === 'id' ? 'Bersiakan teks OCR dengan AI' : 'Clean up OCR text with AI'}
+                              >
+                                <Sparkles className="h-3 w-3" />
+                                {language === 'id' ? 'Pembersihan AI' : 'AI Clean Up'}
+                              </button>
+                            </>
                           )}
                         </div>
                         

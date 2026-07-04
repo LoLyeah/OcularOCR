@@ -1057,6 +1057,40 @@ export function Guide() {
             <p>
               This passes the image arrays safely via encrypted server-side proxy API routes directly to the Google Gemini API or your self-hosted private LLMs. The LLM acts as an intelligent reader to transcribe document layouts accurately.
             </p>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">3. Exporting Extracted Content (Searchable vs. Reflowed PDF)</h2>
+            <p>
+              Once OCR completes, you can export the results in multiple formats. When exporting as PDF, you have two distinct layout options:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-1">
+              <li>
+                <span className="font-semibold">Searchable PDF</span>: Overlays invisible selectable text directly on top of the original scanned images. This requires <span className="font-bold">word-level coordinate metadata</span>, which is only generated during local Tesseract OCR runs. It is disabled for LLM OCR or if post-OCR AI correction is applied.
+              </li>
+              <li>
+                <span className="font-semibold">Reflowed PDF</span>: Generates a clean, reflowed text-only document in standard Letter size with professional 0.75-inch margins. It automatically wraps paragraphs, making it ideal for reading and copying text when coordinates are not available (e.g. Gemini OCR).
+              </li>
+            </ul>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">4. Manual AI Clean Up (Post-OCR Correction)</h2>
+            <p>
+              If you run local Tesseract OCR, you can manually clean up spelling and formatting errors using the purple <span className="font-semibold">AI Clean Up</span> button on the toolbar. 
+            </p>
+            <p>
+              This processes the text page-by-page using the configured LLM, automatically updating the text boxes while preserving the underlying coordinate bounds so that the Searchable PDF export remains fully functional. It also upgrades legacy database records automatically.
+            </p>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">5. Large Document Scaling (Map-Reduce & Retry-Backoff)</h2>
+            <p>
+              OcularOCR includes built-in safeguards to handle huge files (e.g. 100+ pages) without crashing:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-1">
+              <li>
+                <span className="font-semibold">Map-Reduce Summarization</span>: When a document&apos;s text exceeds 25,000 characters, the app automatically splits the document into chunks, summarizes them in parallel, and merges them. This bypasses model context limitations (especially local Ollama instances) and prevents information loss.
+              </li>
+              <li>
+                <span className="font-semibold">Exponential API Backoff</span>: Page-by-page AI OCR runs are protected against rate limits (<code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-indigo-600">429</code> errors). The app will automatically wait (2s, 4s, 8s) and retry up to 3 times per page.
+              </li>
+            </ul>
           </div>
         </div>
       )

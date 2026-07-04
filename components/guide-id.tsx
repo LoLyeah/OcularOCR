@@ -1041,6 +1041,40 @@ export function GuideID() {
             <p>
               Ini mengirimkan array gambar dengan aman melalui rute proxy API terenkripsi server-side langsung ke Google Gemini API atau LLM pribadi Anda. LLM bertindak sebagai pembaca cerdas untuk mentranskripsikan tata letak dokumen secara akurat.
             </p>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">3. Mengekspor Konten Hasil Ekstraksi (PDF Dapat Dicari vs. PDF Reflow)</h2>
+            <p>
+              Setelah OCR selesai, Anda dapat mengekspor hasilnya dalam berbagai format. Saat mengekspor sebagai PDF, Anda memiliki dua opsi tata letak:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-1">
+              <li>
+                <span className="font-semibold">PDF Dapat Dicari</span>: Menempatkan hamparan teks tak terlihat di atas gambar asli yang dipindai. Ini memerlukan <span className="font-bold">metadata koordinat tingkat kata</span>, yang hanya dihasilkan oleh ekstraksi OCR Tesseract lokal. Opsi ini dinonaktifkan untuk LLM OCR atau jika koreksi AI pasca-OCR diterapkan.
+              </li>
+              <li>
+                <span className="font-semibold">PDF Reflow</span>: Menghasilkan dokumen teks bersih dalam ukuran standar Letter dengan margin 0,75 inci yang profesional. Teks paragraf akan otomatis dilipat/dibungkus, menjadikannya ideal untuk membaca dan menyalin teks saat koordinat kata tidak tersedia (misalnya Gemini OCR).
+              </li>
+            </ul>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">4. Pembersihan AI Manual (Koreksi Pasca-OCR)</h2>
+            <p>
+              Jika Anda menjalankan OCR Tesseract lokal, Anda dapat membersihkan kesalahan ejaan dan tanda baca secara manual menggunakan tombol ungu <span className="font-semibold">Pembersihan AI</span> pada bilah alat.
+            </p>
+            <p>
+              Fitur ini akan memproses teks halaman-demi-halaman menggunakan LLM yang dikonfigurasi, memperbarui kotak teks secara otomatis sambil tetap mempertahankan koordinat kata asli agar ekspor PDF Dapat Dicari tetap berfungsi. Fitur ini juga otomatis meningkatkan format data lama di database.
+            </p>
+
+            <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200 mt-4">5. Skala Dokumen Besar (Map-Reduce & Retry-Backoff)</h2>
+            <p>
+              OcularOCR menyertakan sistem pengaman terintegrasi untuk menangani file berukuran besar (misalnya 100+ halaman) tanpa kendala:
+            </p>
+            <ul className="list-disc pl-5 space-y-1 mt-1">
+              <li>
+                <span className="font-semibold">Ringkasan Map-Reduce</span>: Ketika teks dokumen melebihi 25.000 karakter, aplikasi secara otomatis membagi teks menjadi beberapa bagian, meringkasnya secara paralel, dan menggabungkannya. Ini menghindari batasan panjang konteks model (terutama instans Ollama lokal) dan mencegah hilangnya detail di tengah dokumen.
+              </li>
+              <li>
+                <span className="font-semibold">Backoff API Eksponensial</span>: Ekstraksi AI OCR halaman-demi-halaman dilindungi dari batas kecepatan panggilan API (kesalahan status <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-indigo-600">429</code>). Aplikasi akan otomatis menunggu (2d, 4d, 8d) dan mencoba kembali hingga 3 kali per halaman.
+              </li>
+            </ul>
           </div>
         </div>
       )

@@ -279,9 +279,7 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
                           type: { type: 'string', enum: ['text', 'heading', 'table', 'list'] },
                           normalized_bbox: {
                             type: 'array',
-                            items: { type: 'number' },
-                            minItems: 4,
-                            maxItems: 4
+                            items: { type: 'number' }
                           }
                         },
                         required: ['text', 'type', 'normalized_bbox'],
@@ -353,7 +351,7 @@ function structuredResponseToOcrResult(
 
     let pageText = '';
     const blocks = (p.blocks || []).map((b) => {
-      const [nx0, ny0, nx1, ny1] = b.normalized_bbox;
+      const [nx0 = 0, ny0 = 0, nx1 = 0, ny1 = 0] = b.normalized_bbox || [];
       const blockText = b.text;
       pageText += blockText + '\n';
       return {

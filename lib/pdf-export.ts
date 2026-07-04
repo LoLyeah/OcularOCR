@@ -120,71 +120,105 @@ export async function exportReflowedPDF({
   structuredOcr,
   pageDimensions
 }: ExportReflowedPDFOptions): Promise<void> {
-  const getPageDim = (idx: number) => {
-    if (pageDimensions && pageDimensions[idx]) {
-      return pageDimensions[idx];
-    }
-    return { width: 612, height: 792 };
-  };
+  const hasWordCoords = structuredOcr.pages?.some(p => p.words && p.words.length > 0);
 
-  const firstDim = getPageDim(0);
-  const pdf = new jsPDF({
-    orientation: firstDim.width > firstDim.height ? 'l' : 'p',
-    unit: 'pt',
-    format: [firstDim.width, firstDim.height],
-    compress: true
-  });
-
-  const pageCount = Math.max(
-    structuredOcr.pages?.length || 1,
-    pageDimensions.length
-  );
-
-  for (let i = 0; i < pageCount; i++) {
-    if (i > 0) {
-      const dim = getPageDim(i);
-      pdf.addPage([dim.width, dim.height], dim.width > dim.height ? 'l' : 'p');
-    }
-
-    const pageNumber = i + 1;
-    const pageData = structuredOcr.pages?.find(p => p.pageNumber === pageNumber);
-
-    if (pageData && pageData.words && pageData.words.length > 0) {
-      pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(0, 0, 0);
-
-      const lines = groupWordsIntoLines(pageData.words);
-      for (const line of lines) {
-        if (!line.text.trim()) continue;
-        const lineHeight = line.y1 - line.y0;
-        if (lineHeight <= 0) continue;
-
-        const fontSize = Math.max(4, lineHeight);
-        pdf.setFontSize(fontSize);
-        pdf.text(line.text, line.x0, line.y1, {
-          renderingMode: 'fill'
-        });
+  if (hasWordCoords) {
+    const getPageDim = (idx: number) => {
+      if (pageDimensions && pageDimensions[idx]) {
+        return pageDimensions[idx];
       }
-    } else if (pageData && pageData.text) {
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(10);
-      pdf.setTextColor(0, 0, 0);
+      return { width: 612, height: 792 };
+    };
 
-      const lines = pageData.text.split('\n');
-      let y = 20;
-      for (const line of lines) {
-        if (y > getPageDim(i).height - 20) {
-          const dim = getPageDim(pageCount); // fallback
-          pdf.addPage([dim.width, dim.height], dim.width > dim.height ? 'l' : 'p');
-          y = 20;
+    const firstDim = getPageDim(0);
+    const pdf = new jsPDF({
+      orientation: firstDim.width > firstDim.height ? 'l' : 'p',
+      unit: 'pt',
+      format: [firstDim.width, firstDim.height],
+      compress: true
+    });
+
+    const pageCount = Math.max(
+      structuredOcr.pages?.length || 1,
+      pageDimensions.length
+    );
+
+    for (let i = 0; i < pageCount; i++) {
+      if (i > 0) {
+        const dim = getPageDim(i);
+        pdf.addPage([dim.width, dim.height], dim.width > dim.height ? 'l' : 'p');
+      }
+
+      const pageNumber = i + 1;
+      const pageData = structuredOcr.pages?.find(p => p.pageNumber === pageNumber);
+
+      if (pageData && pageData.words && pageData.words.length > 0) {
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(0, 0, 0);
+
+        const lines = groupWordsIntoLines(pageData.words);
+        for (const line of lines) {
+          if (!line.text.trim()) continue;
+          const lineHeight = line.y1 - line.y0;
+          if (lineHeight <= 0) continue;
+
+          const fontSize = Math.max(4, lineHeight);
+          pdf.setFontSize(fontSize);
+          pdf.text(line.text, line.x0, line.y1, {
+            renderingMode: 'fill'
+          });
         }
-        if (line.trim()) {
-          pdf.text(line, 20, y);
-        }
-        y += 14;
       }
     }
+
+    pdf.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
+  } else {
+    // Text-only OCR (e.g. Gemini AI OCR): Render using standard Letter page format with margins and text wrapping
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'pt',
+      format: 'letter',
+      compress: true
+    });
+
+    const pageWidth = 612;
+    const pageHeight = 792;
+    const margin = 54; // 0.75 in margins
+    const maxLineWidth = pageWidth - (margin * 2);
+
+    const sortedPages = [...(structuredOcr.pages || [])].sort((a, b) => a.pageNumber - b.pageNumber);
+
+    for (let i = 0; i < sortedPages.length; i++) {
+      if (i > 0) {
+        pdf.addPage('letter', 'p');
+      }
+
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(0, 0, 0);
+
+      const pageData = sortedPages[i];
+      if (pageData && pageData.text) {
+        const paragraphs = pageData.text.split('\n');
+        let y = margin;
+
+        for (const para of paragraphs) {
+          const wrappedLines: string[] = pdf.splitTextToSize(para, maxLineWidth);
+          for (const line of wrappedLines) {
+            if (y > pageHeight - margin) {
+              pdf.addPage('letter', 'p');
+              y = margin;
+            }
+            if (line.trim()) {
+              pdf.text(line, margin, y);
+            }
+            y += 15; // Line height spacing
+          }
+          y += 6; // Paragraph spacing
+        }
+      }
+    }
+
+    pdf.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
   }
-
-  pdf.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
 }

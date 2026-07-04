@@ -1,7 +1,7 @@
 import { createWorker } from 'tesseract.js';
 import { ocrPool } from './ocr-pool';
 import { preprocessImage, PreprocessingOptions, rotateCanvas } from './preprocessing';
-import { StructuredOcrResult } from './storage';
+import { StructuredOcrResult, OcrWord } from './storage';
 import { parseHocr } from './hocr-parse';
 
 
@@ -159,27 +159,33 @@ export async function performOCR(
     const pageWidth = canvas?.width || 0;
     const pageHeight = canvas?.height || 0;
 
-    const words = (tesseractResult.data.words || []).map((w: any) => ({
-      text: w.text,
-      bbox: {
-        x0: w.bbox.x0,
-        y0: w.bbox.y0,
-        x1: w.bbox.x1,
-        y1: w.bbox.y1
-      },
-      confidence: w.conf != null ? w.conf : undefined
-    }));
-
     let lines, blocks;
+    let words: OcrWord[] = [];
     const hocr = tesseractResult.data.hocr;
     if (hocr && pageWidth > 0 && pageHeight > 0) {
       try {
         const parsed = parseHocr(hocr, pageWidth, pageHeight);
         lines = parsed.lines.length > 0 ? parsed.lines : undefined;
         blocks = parsed.blocks.length > 0 ? parsed.blocks : undefined;
+        if (lines) {
+          words = lines.flatMap(line => line.words || []);
+        }
       } catch (e) {
         console.warn(`hOCR parse failed for page ${pageNum}`, e);
       }
+    }
+
+    if (words.length === 0 && tesseractResult.data.words) {
+      words = (tesseractResult.data.words || []).map((w: any) => ({
+        text: w.text,
+        bbox: {
+          x0: w.bbox.x0,
+          y0: w.bbox.y0,
+          x1: w.bbox.x1,
+          y1: w.bbox.y1
+        },
+        confidence: w.conf != null ? w.conf : undefined
+      }));
     }
 
     if (sources.length > 1) {
@@ -280,22 +286,28 @@ export async function performPdfOCR(
         const pageWidth = finalCanvas.width;
         const pageHeight = finalCanvas.height;
 
-        const words = (tesseractResult.data.words || []).map((w: any) => ({
-          text: w.text,
-          bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 },
-          confidence: w.conf != null ? w.conf : undefined
-        }));
-
         let lines, blocks;
+        let words: OcrWord[] = [];
         const hocr = tesseractResult.data.hocr;
         if (hocr && pageWidth > 0 && pageHeight > 0) {
           try {
             const parsed = parseHocr(hocr, pageWidth, pageHeight);
             lines = parsed.lines.length > 0 ? parsed.lines : undefined;
             blocks = parsed.blocks.length > 0 ? parsed.blocks : undefined;
+            if (lines) {
+              words = lines.flatMap(line => line.words || []);
+            }
           } catch (e) {
             console.warn(`hOCR parse failed for page ${pageNum}`, e);
           }
+        }
+
+        if (words.length === 0 && tesseractResult.data.words) {
+          words = (tesseractResult.data.words || []).map((w: any) => ({
+            text: w.text,
+            bbox: { x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 },
+            confidence: w.conf != null ? w.conf : undefined
+          }));
         }
 
         // Clean up canvas memory immediately

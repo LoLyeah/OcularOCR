@@ -111,7 +111,7 @@ function processParagraph(
   const classNames = par.parentElement?.className || '';
 
   const words: OcrWord[] = [];
-  const wordEls = par.querySelectorAll(':scope > .ocr_word, :scope > .ocrx_word');
+  const wordEls = par.querySelectorAll('.ocr_word, .ocrx_word');
 
   for (const wEl of wordEls) {
     const wBbox = parseBbox(wEl.getAttribute('title') || '');

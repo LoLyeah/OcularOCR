@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download, RefreshCw, AlertTriangle, X, Tag, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResult } from '@/lib/storage';
@@ -107,7 +107,12 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
   const pendingPrepOptsRef = useRef<PreprocessingOptions | null>(null);
   
-  const pdfContainerRef = useRef<HTMLDivElement>(null);
+  const pdfContainerRef = useRef<HTMLDivElement | null>(null);
+  const [pdfContainerTrigger, setPdfContainerTrigger] = useState<number>(0);
+  const setPdfContainerNode = useCallback((node: HTMLDivElement | null) => {
+    pdfContainerRef.current = node;
+    setPdfContainerTrigger(prev => prev + 1);
+  }, []);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<AISettings | null>(null);
   const isMobile = useIsMobile();
@@ -242,7 +247,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => {
       cancelled = true;
     };
-  }, [pdfDocument, pdfCurrentPage, pdfRenderScale, doc.type, activeTab, toast]);
+  }, [pdfDocument, pdfCurrentPage, pdfRenderScale, doc.type, pdfContainerTrigger, toast]);
 
   // Update overlay dimensions when container resizes
   useEffect(() => {
@@ -258,7 +263,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     const ro = new ResizeObserver(updateDims);
     ro.observe(previewContainerRef.current);
     return () => ro.disconnect();
-  }, [showOcrOverlay, isRegionMode, structuredOcr, pdfCurrentPage]);
+  }, [showOcrOverlay, isRegionMode, structuredOcr, pdfCurrentPage, pdfContainerTrigger]);
 
   // Load canvas for the configure panel dynamically
   useEffect(() => {
@@ -1406,7 +1411,7 @@ settings = JSON.parse(decryptedStr);
                     )}
                     <div ref={previewContainerRef} className="relative">
                     {doc.type.includes('pdf') ? (
-                      <div ref={pdfContainerRef} className="flex flex-col items-center" />
+                      <div ref={setPdfContainerNode} className="flex flex-col items-center" />
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       fileUrl && <img src={fileUrl} alt={doc.name} className="w-full rounded object-contain" />

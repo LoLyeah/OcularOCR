@@ -807,7 +807,7 @@ settings = JSON.parse(decryptedStr);
 
     try {
       if (mode === 'searchable') {
-        if (!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !(structuredOcr.pages[0].words?.length || structuredOcr.pages[0].lines?.length || structuredOcr.pages[0].blocks?.length)) {
+        if (!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages.some(p => p.words?.length || p.lines?.length || p.blocks?.length)) {
           toast({
             title: language === 'id' ? "PDF Dapat Dicari tidak tersedia" : "Searchable PDF not available",
             description: language === 'id' ? "Dukungan kata presisi tidak ditemukan. Harap gunakan ekspor PDF Reflow." : "Precise word metadata not found. Please use Reflowed PDF export.",
@@ -1364,9 +1364,9 @@ settings = JSON.parse(decryptedStr);
                           </button>
                           <button
                             onClick={() => handleExportPdf('searchable')}
-                            disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !(structuredOcr.pages[0].words?.length || structuredOcr.pages[0].lines?.length || structuredOcr.pages[0].blocks?.length)}
+                            disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages.some(p => p.words?.length || p.lines?.length || p.blocks?.length)}
                             className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-50/10 border border-indigo-200 dark:border-indigo-800/40 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
-                            title={(!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages[0].words?.length) ? (language === 'id' ? 'PDF Dapat Dicari memerlukan OCR Tesseract' : 'Searchable PDF requires Tesseract OCR') : ''}
+                            title={(!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages.some(p => p.words?.length)) ? (language === 'id' ? 'PDF Dapat Dicari memerlukan OCR Tesseract' : 'Searchable PDF requires Tesseract OCR') : ''}
                           >
                             <Download className="h-3 w-3" />
                             {language === 'id' ? 'PDF Dapat Dicari' : 'Searchable PDF'}

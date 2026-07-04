@@ -90,10 +90,9 @@ function main() {
 
   let bumped = false;
   if (coreChanged) {
-    versionData.minor += 1;
-    versionData.patch = 0;
+    versionData.patch += 1;
     bumped = true;
-    console.log('Core files changed. Bumped minor (x) version.');
+    console.log('Core files changed. Bumped patch version.');
   } else if (otherChanged) {
     versionData.patch += 1;
     bumped = true;

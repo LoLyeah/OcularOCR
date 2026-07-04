@@ -185,8 +185,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             console.error('Failed to decrypt settings for OCR check', e);
           }
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to load document', err);
+        toast({ title: 'Failed to load document', description: err.message || String(err), variant: 'error' });
       }
     }
     loadData();
@@ -194,7 +195,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [doc, cryptoKey]);
+  }, [doc, cryptoKey, toast]);
 
   // Update overlay dimensions when overlay, region mode, or container resizes
   // Render single PDF page on load or page/scale changes
@@ -218,15 +219,16 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             }
           }, 50);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to render PDF page', err);
+        toast({ title: 'Failed to render PDF page', description: err.message || String(err), variant: 'error' });
       }
     }
     renderPage();
     return () => {
       cancelled = true;
     };
-  }, [pdfBuffer, pdfCurrentPage, pdfRenderScale, doc.type]);
+  }, [pdfBuffer, pdfCurrentPage, pdfRenderScale, doc.type, toast]);
 
   // Update overlay dimensions when container resizes
   useEffect(() => {

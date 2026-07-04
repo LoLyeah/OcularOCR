@@ -20,32 +20,59 @@ function isVisionModelError(err: any): boolean {
   return msg.includes('does not support image') || msg.includes('image input') || msg.includes('does not support multimodal') || msg.includes('image not supported') || msg.includes('cannot read') && msg.includes('image');
 }
 
-export async function summarizeText(text: string, settings: AISettings, tags?: string[]): Promise<string> {
-  let prompt = '';
-  if (settings.customSummaryPrompt && settings.customSummaryPrompt.trim()) {
-    prompt = settings.customSummaryPrompt;
-    if (prompt.includes('{{tags}}')) {
-      prompt = prompt.replace('{{tags}}', tags && tags.length > 0 ? tags.join(', ') : 'None');
-    } else if (tags && tags.length > 0) {
-      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\n${prompt}`;
+function chunkText(text: string, maxChunkSize: number = 25000): string[] {
+  const pageDelimiter = /--- PAGE (\d+) ---/g;
+  const matches = [...text.matchAll(pageDelimiter)];
+  
+  if (matches.length === 0) {
+    const chunks: string[] = [];
+    let current = '';
+    const words = text.split(/\s+/);
+    for (const w of words) {
+      if ((current + ' ' + w).length > maxChunkSize) {
+        chunks.push(current.trim());
+        current = w;
+      } else {
+        current += (current ? ' ' : '') + w;
+      }
     }
+    if (current) chunks.push(current.trim());
+    return chunks;
+  }
+
+  const chunks: string[] = [];
+  let lastIndex = 0;
+  let currentChunk = '';
+
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const index = match.index!;
+    const nextPageText = text.substring(lastIndex, index);
     
-    if (prompt.includes('{{text}}')) {
-      prompt = prompt.replace('{{text}}', text);
-    } else if (prompt.includes('{{document_text}}')) {
-      prompt = prompt.replace('{{document_text}}', text);
+    if ((currentChunk + nextPageText).length > maxChunkSize && currentChunk) {
+      chunks.push(currentChunk.trim());
+      currentChunk = nextPageText;
     } else {
-      prompt = `${prompt}\n\n${text}`;
+      currentChunk += nextPageText;
     }
+    lastIndex = index;
+  }
+  
+  const lastPageText = text.substring(lastIndex);
+  if ((currentChunk + lastPageText).length > maxChunkSize && currentChunk) {
+    chunks.push(currentChunk.trim());
+    chunks.push(lastPageText.trim());
   } else {
-    prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
-    if (tags && tags.length > 0) {
-      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\nPlease provide a concise summary and extract key data points from the following document text, utilizing the tags to provide more accurate context and focus for the analysis:\n\n${text}`;
+    currentChunk += lastPageText;
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
     }
   }
 
-  const temp = settings.temperature !== undefined ? settings.temperature : 0.2;
+  return chunks;
+}
 
+async function callLlm(prompt: string, settings: AISettings, temp: number = 0.2): Promise<string> {
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
     const response = await ai.models.generateContent({
@@ -55,7 +82,7 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
         temperature: temp
       }
     });
-    return response.text || 'No summary generated.';
+    return response.text || 'No response generated.';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
     const isOllama = settings.provider === 'ollama';
     let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
@@ -94,10 +121,66 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
     }
 
     const data = await res.json();
-    return data.choices?.[0]?.message?.content || 'No summary generated.';
+    return data.choices?.[0]?.message?.content || 'No response generated.';
   }
   
   throw new Error('Invalid AI provider configured.');
+}
+
+export async function summarizeText(text: string, settings: AISettings, tags?: string[]): Promise<string> {
+  const maxLimit = 25000;
+  
+  if (text.length > maxLimit) {
+    const chunks = chunkText(text, maxLimit);
+    
+    // Map phase: Summarize each chunk in parallel
+    const mapPromises = chunks.map(async (chunk, idx) => {
+      const chunkPrompt = `Below is part ${idx + 1} of ${chunks.length} from a larger document. Please provide a detailed bulleted summary of key points and facts in this section only:\n\n${chunk}`;
+      return callLlm(chunkPrompt, settings, 0.1);
+    });
+    
+    const chunkSummaries = await Promise.all(mapPromises);
+    
+    // Reduce phase: Synthesize summaries into a final global summary
+    const combinedSummaryText = chunkSummaries
+      .map((summary, idx) => `[Section ${idx + 1} Summary]:\n${summary}`)
+      .join('\n\n');
+      
+    let finalPrompt = '';
+    if (settings.customSummaryPrompt && settings.customSummaryPrompt.trim()) {
+      finalPrompt = `${settings.customSummaryPrompt}\n\nHere are the intermediate section summaries:\n\n${combinedSummaryText}`;
+    } else {
+      finalPrompt = `Please synthesize the following intermediate section summaries into a single cohesive, highly professional global summary of the entire document. Maintain key names, dates, and crucial facts:\n\n${combinedSummaryText}`;
+    }
+    
+    return callLlm(finalPrompt, settings, 0.2);
+  }
+
+  let prompt = '';
+  if (settings.customSummaryPrompt && settings.customSummaryPrompt.trim()) {
+    prompt = settings.customSummaryPrompt;
+    if (prompt.includes('{{tags}}')) {
+      prompt = prompt.replace('{{tags}}', tags && tags.length > 0 ? tags.join(', ') : 'None');
+    } else if (tags && tags.length > 0) {
+      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\n${prompt}`;
+    }
+    
+    if (prompt.includes('{{text}}')) {
+      prompt = prompt.replace('{{text}}', text);
+    } else if (prompt.includes('{{document_text}}')) {
+      prompt = prompt.replace('{{document_text}}', text);
+    } else {
+      prompt = `${prompt}\n\n${text}`;
+    }
+  } else {
+    prompt = `Please provide a concise summary and extract key data points from the following document text:\n\n${text}`;
+    if (tags && tags.length > 0) {
+      prompt = `Document Tags/Categories: ${tags.join(', ')}\n\nPlease provide a concise summary and extract key data points from the following document text, utilizing the tags to provide more accurate context and focus for the analysis:\n\n${text}`;
+    }
+  }
+
+  const temp = settings.temperature !== undefined ? settings.temperature : 0.2;
+  return callLlm(prompt, settings, temp);
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {

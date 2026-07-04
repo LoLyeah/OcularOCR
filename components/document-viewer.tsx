@@ -377,6 +377,40 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         throw new Error(language === 'id' ? 'Pengaturan AI tidak ditemukan.' : 'AI settings not found.');
       }
 
+      const callOcrWithRetry = async <T,>(
+        apiCall: () => Promise<T>,
+        pageNum: number,
+        totalPages: number,
+        maxRetries: number = 3
+      ): Promise<T> => {
+        let attempt = 0;
+        while (true) {
+          try {
+            return await apiCall();
+          } catch (err: any) {
+            attempt++;
+            const errMsg = String(err?.message || err || '').toLowerCase();
+            const isRateLimit = errMsg.includes('429') || errMsg.includes('exhausted') || errMsg.includes('rate limit') || errMsg.includes('too many requests');
+            
+            if (isRateLimit && attempt <= maxRetries) {
+              const delayMs = Math.pow(2, attempt) * 1000;
+              const delaySec = delayMs / 1000;
+              console.warn(`Rate limit hit on page ${pageNum}. Retrying in ${delaySec}s (Attempt ${attempt}/${maxRetries})...`, err);
+              
+              setOcrProgressText(
+                language === 'id'
+                  ? `Batas limit terlampaui. Mengulang halaman ${pageNum}/${totalPages} dalam ${delaySec} detik...`
+                  : `Rate limit hit. Retrying page ${pageNum}/${totalPages} in ${delaySec}s...`
+              );
+              
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+              continue;
+            }
+            throw err;
+          }
+        }
+      };
+
       if (doc.type.includes('pdf')) {
         if (useLlm) {
           setOcrProgressText(language === 'id' ? 'Memulai OCR bertenaga AI...' : 'Starting AI-powered OCR...');
@@ -408,7 +442,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
             if (useStructured) {
               try {
                 const pageDimensions = [{ width: w, height: h }];
-                const structuredRes = await extractStructuredFromImages([imgBase64], settings!, pageDimensions);
+                const structuredRes = await callOcrWithRetry(
+                  () => extractStructuredFromImages([imgBase64], settings!, pageDimensions),
+                  pageNum,
+                  pdfTotalPages
+                );
                 const pageObj = structuredRes.pages[0];
                 if (pageObj) {
                   pageObj.pageNumber = pageNum;
@@ -416,7 +454,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                 }
               } catch (err) {
                 if (err instanceof StructuredOcrUnsupportedError) {
-                  const text = await extractTextFromImages([imgBase64], settings!);
+                  const text = await callOcrWithRetry(
+                    () => extractTextFromImages([imgBase64], settings!),
+                    pageNum,
+                    pdfTotalPages
+                  );
                   pagesData.push({
                     pageNumber: pageNum,
                     text,
@@ -427,7 +469,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                 }
               }
             } else {
-              const text = await extractTextFromImages([imgBase64], settings!);
+              const text = await callOcrWithRetry(
+                () => extractTextFromImages([imgBase64], settings!),
+                pageNum,
+                pdfTotalPages
+              );
               pagesData.push({
                 pageNumber: pageNum,
                 text,
@@ -480,11 +526,19 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           if (useStructured) {
             try {
               const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
-              finalOcrResult = await extractStructuredFromImages([imgBase64], settings!, pageDimensions);
+              finalOcrResult = await callOcrWithRetry(
+                () => extractStructuredFromImages([imgBase64], settings!, pageDimensions),
+                1,
+                1
+              );
               extractedText = finalOcrResult.text;
             } catch (err) {
               if (err instanceof StructuredOcrUnsupportedError) {
-                extractedText = await extractTextFromImages([imgBase64], settings!);
+                extractedText = await callOcrWithRetry(
+                  () => extractTextFromImages([imgBase64], settings!),
+                  1,
+                  1
+                );
                 finalOcrResult = {
                   text: extractedText,
                   pages: [{ pageNumber: 1, text: extractedText, words: [] }]
@@ -494,7 +548,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
               }
             }
           } else {
-            extractedText = await extractTextFromImages([imgBase64], settings!);
+            extractedText = await callOcrWithRetry(
+              () => extractTextFromImages([imgBase64], settings!),
+              1,
+              1
+            );
             finalOcrResult = {
               text: extractedText,
               pages: [{ pageNumber: 1, text: extractedText, words: [] }]

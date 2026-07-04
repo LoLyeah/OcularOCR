@@ -242,7 +242,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => {
       cancelled = true;
     };
-  }, [pdfDocument, pdfCurrentPage, pdfRenderScale, doc.type, toast]);
+  }, [pdfDocument, pdfCurrentPage, pdfRenderScale, doc.type, activeTab, toast]);
 
   // Update overlay dimensions when container resizes
   useEffect(() => {

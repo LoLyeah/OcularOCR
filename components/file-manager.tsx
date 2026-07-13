@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe } from 'lucide-react';
-import { listDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings, StructuredOcrResult } from '@/lib/storage';
+import { listDecryptedDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
 import { renderPdfToCanvas, renderPdfPageToCanvas, getPdfPageCount } from '@/lib/pdf';
 import { performOCR, performPdfOCR } from '@/lib/ocr';
@@ -15,6 +15,21 @@ import { parseOcrPages } from './document-viewer';
 interface FileManagerProps {
   cryptoKey: CryptoKey;
   onOpenDoc: (doc: DocumentEntry) => void;
+}
+
+const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
+
+function detectDocumentType(buffer: ArrayBuffer): string | null {
+  const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 16));
+  if (bytes.length >= 5 && new TextDecoder().decode(bytes.slice(0, 5)) === '%PDF-') return 'application/pdf';
+  if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (
+    bytes.length >= 12 &&
+    new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' &&
+    new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP'
+  ) return 'image/webp';
+  return null;
 }
 
 export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
@@ -45,7 +60,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   const dragCounter = useRef(0);
 
   const loadDocs = async () => {
-    const list = await listDocuments();
+    const list = await listDecryptedDocuments(cryptoKey);
     const enrichedList = await Promise.all(list.map(async (doc) => {
       let decryptedTags: string[] = [];
       if (doc.encryptedTags && doc.tagsIv) {
@@ -64,7 +79,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   useEffect(() => {
     let active = true;
     const fetchDocs = async () => {
-      const list = await listDocuments();
+      const list = await listDecryptedDocuments(cryptoKey);
       const enrichedList = await Promise.all(list.map(async (doc) => {
         let decryptedTags: string[] = [];
         if (doc.encryptedTags && doc.tagsIv) {
@@ -92,13 +107,17 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
         
-        // Supported types validation
-        const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
-        const isImage = file.type.startsWith('image/') && (
-          file.type.includes('png') || file.type.includes('jpeg') || file.type.includes('webp') || file.type.includes('jpg')
-        );
+        if (file.size > MAX_IMPORT_BYTES) {
+          setCustomAlert({
+            title: language === 'id' ? 'File Terlalu Besar' : 'File Too Large',
+            message: language === 'id' ? `"${file.name}" melebihi batas impor 25 MB.` : `"${file.name}" exceeds the 25 MB import limit.`,
+          });
+          continue;
+        }
 
-        if (!isPdf && !isImage) {
+        const buffer = await file.arrayBuffer();
+        const detectedType = detectDocumentType(buffer);
+        if (!detectedType) {
           setCustomAlert({
             title: language === 'id' ? "Format File Tidak Didukung" : "Unsupported File Format",
             message: language === 'id' 
@@ -107,19 +126,17 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           });
           continue;
         }
-
-        const buffer = await file.arrayBuffer();
         const { encrypted, iv } = await encryptBuffer(buffer, cryptoKey);
         
         const doc: DocumentEntry = {
           id: crypto.randomUUID(),
           name: file.name,
-          type: file.type || 'application/octet-stream',
+          type: detectedType,
           createdAt: Date.now(),
           iv,
           encryptedData: encrypted,
         };
-        await saveDocument(doc);
+        await saveDocument(doc, cryptoKey);
         successCount++;
       }
       await loadDocs();
@@ -222,18 +239,21 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       }
       
       const buffer = await blob.arrayBuffer();
+      if (buffer.byteLength > MAX_IMPORT_BYTES) throw new Error('The file exceeds the 25 MB import limit.');
+      const detectedType = detectDocumentType(buffer);
+      if (!detectedType) throw new Error('The URL did not return a supported PDF, PNG, JPEG, or WebP file.');
       const { encrypted, iv } = await encryptBuffer(buffer, cryptoKey);
       
       const doc: DocumentEntry = {
         id: crypto.randomUUID(),
         name: fileName,
-        type: contentType,
+        type: detectedType,
         createdAt: Date.now(),
         iv,
         encryptedData: encrypted,
       };
       
-      await saveDocument(doc);
+      await saveDocument(doc, cryptoKey);
       setDownloadUrl('');
       setShowUrlInput(false);
       await loadDocs();
@@ -343,7 +363,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       ...docToSave,
       encryptedTags: encrypted,
       tagsIv: iv
-    });
+    }, cryptoKey);
     setTaggingDocId(null);
     setNewTagValue('');
     await loadDocs();
@@ -364,7 +384,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       ...docToSave,
       encryptedTags: encrypted,
       tagsIv: iv
-    });
+    }, cryptoKey);
     await loadDocs();
     toast({
       title: language === 'id' ? "Tag dihapus" : "Tag removed",
@@ -404,7 +424,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
       ...docToSave,
       encryptedTags: encrypted,
       tagsIv: iv
-    });
+    }, cryptoKey);
     setTaggingDocId(null);
     await loadDocs();
     toast({
@@ -455,7 +475,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             ...docToSave,
             encryptedTags: encryptedTags,
             tagsIv
-          });
+          }, cryptoKey);
         } catch (e) {
           console.error(`Auto-tagging failed for ${doc.name}`, e);
         }
@@ -714,7 +734,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             ocrTextIv: iv,
             encryptedTags,
             tagsIv
-          });
+          }, cryptoKey);
           successCount++;
         } catch (e) {
           console.error(`OCR failed for ${doc.name}`, e);

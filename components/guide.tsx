@@ -639,7 +639,7 @@ export function Guide() {
           <div className="p-4 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 flex gap-3 text-xs leading-relaxed text-indigo-800 dark:text-indigo-300">
             <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Zero-Knowledge Guarantee:</span> OcularOCR operates entirely within your browser sandboxed environment. Your master passphrase never touches any remote server, and your files are encrypted locally before being stored in IndexedDB.
+              <span className="font-bold">Local vault guarantee:</span> Your master passphrase and encryption key never leave the browser, and files are encrypted locally before being stored in IndexedDB. Optional cloud AI operations require consent and send the selected document content to the configured provider.
             </div>
           </div>
 
@@ -819,7 +819,7 @@ export function Guide() {
 
                 <div className="mt-3 text-[9px] text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-900 pt-2 flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                  <span>PBKDF2 SHA-256 (100,000 iterations) + AES-GCM Encrypted.</span>
+                  <span>Versioned PBKDF2 SHA-256 parameters (600,000 iterations for new vaults) + AES-GCM encryption.</span>
                 </div>
               </div>
             </div>

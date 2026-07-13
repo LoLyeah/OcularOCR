@@ -1,5 +1,6 @@
 import { AISettings, StructuredOcrResult } from './storage';
 import { GoogleGenAI } from '@google/genai';
+import { assertAiRequestAllowed } from './ai-policy';
 
 export class StructuredOcrUnsupportedError extends Error {
   constructor(message?: string) {
@@ -73,6 +74,7 @@ function chunkText(text: string, maxChunkSize: number = 25000): string[] {
 }
 
 async function callLlm(prompt: string, settings: AISettings, temp: number = 0.2): Promise<string> {
+  assertAiRequestAllowed(settings);
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
     const response = await ai.models.generateContent({
@@ -184,6 +186,7 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {
+  assertAiRequestAllowed(settings);
   let defaultPrompt = "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
   
   if (settings.handwritingMode) {
@@ -281,6 +284,7 @@ export async function extractStructuredFromImages(
   settings: AISettings,
   pageDimensions: { width: number; height: number }[]
 ): Promise<StructuredOcrResult> {
+  assertAiRequestAllowed(settings);
   const structuredPrompt = `Extract text from these document images and return it as structured JSON.
 For each page, identify text blocks and provide for each block:
 - "text": the exact text content
@@ -471,6 +475,7 @@ export async function correctOcrText(
   settings: AISettings,
   imageBase64?: string
 ): Promise<string> {
+  assertAiRequestAllowed(settings);
   const prompt = settings.postOcrCorrectionPrompt && settings.postOcrCorrectionPrompt.trim()
     ? settings.postOcrCorrectionPrompt.replace('{{text}}', text)
     : `Fix any OCR errors in the following text. Preserve line breaks, paragraphs, and reading order. Output only the corrected text without any introductory remarks or explanations:\n\n${text}`;

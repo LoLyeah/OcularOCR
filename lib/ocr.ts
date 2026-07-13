@@ -1,4 +1,3 @@
-import { createWorker } from 'tesseract.js';
 import { ocrPool } from './ocr-pool';
 import { preprocessImage, PreprocessingOptions, rotateCanvas } from './preprocessing';
 import { StructuredOcrResult, OcrWord } from './storage';
@@ -9,7 +8,6 @@ async function autoRotateCanvasIfNeeded(
   canvas: HTMLCanvasElement,
   language: string,
   threshold: number,
-  allAreBundled: boolean
 ): Promise<{ rotatedCanvas: HTMLCanvasElement; detectedRotation: number; confidence: number }> {
   // Resize to max 800px preserving aspect ratio
   const maxDim = 800;
@@ -32,34 +30,13 @@ async function autoRotateCanvasIfNeeded(
   if (!sCtx) return { rotatedCanvas: canvas, detectedRotation: 0, confidence: 0 };
   sCtx.drawImage(canvas, 0, 0, sampleW, sampleH);
 
-  let tempWorker;
   let bestAngle = 0;
   let bestConf = -1;
   let zeroConf = 0;
 
   try {
-    if (allAreBundled) {
-      try {
-        const langPath = `${window.location.origin}/tessdata`;
-        tempWorker = await createWorker(language, 1, {
-          langPath,
-          gzip: true,
-        });
-      } catch (e) {
-        console.warn("Failed to create local rotation check worker, using CDN...", e);
-        tempWorker = await createWorker(language, 1, {
-          gzip: true,
-        });
-      }
-    } else {
-      tempWorker = await createWorker(language, 1, {
-        gzip: true,
-      });
-    }
-
     // 1. Check 0 degrees (optimistic orientation check)
-    const ret0 = await tempWorker.recognize(sampleCanvas);
-    zeroConf = ret0.data?.confidence ?? 0;
+    [zeroConf] = await ocrPool.recognizeSequential([sampleCanvas], language);
     bestConf = zeroConf;
     bestAngle = 0;
 
@@ -69,10 +46,11 @@ async function autoRotateCanvasIfNeeded(
     } else {
       // 2. Otherwise test 90, 180, 270 degrees cardinally
       const angles = [90, 180, 270];
-      for (const angle of angles) {
-        const rotatedSample = rotateCanvas(sampleCanvas, angle);
-        const ret = await tempWorker.recognize(rotatedSample);
-        const conf = ret.data?.confidence ?? 0;
+      const rotatedSamples = angles.map((angle) => rotateCanvas(sampleCanvas, angle));
+      const confidences = await ocrPool.recognizeSequential(rotatedSamples, language);
+      for (let index = 0; index < angles.length; index++) {
+        const angle = angles[index];
+        const conf = confidences[index];
         
         if (conf > bestConf) {
           bestConf = conf;
@@ -82,10 +60,6 @@ async function autoRotateCanvasIfNeeded(
     }
   } catch (err) {
     console.error("Auto-rotation check failed", err);
-  } finally {
-    if (tempWorker) {
-      await tempWorker.terminate();
-    }
   }
 
   // Only rotate if the best angle is cardinally different from 0,
@@ -108,10 +82,6 @@ export async function performOCR(
 ): Promise<StructuredOcrResult> {
   const sources = Array.isArray(imageSource) ? imageSource : [imageSource];
   
-  // Determine if all requested languages are bundled
-  const requestedLangs = language.split('+');
-  const allAreBundled = requestedLangs.every(l => l === 'eng' || l === 'ind');
-
   // 1. Preprocess all pages
   const prepOpts = options || {
     enabled: false,
@@ -135,7 +105,6 @@ export async function performOCR(
             finalCanvas,
             language,
             prepOpts.rotationThreshold ?? 3.0,
-            allAreBundled
           );
           finalCanvas = rotationResult.rotatedCanvas;
         } catch (e) {
@@ -217,7 +186,7 @@ export async function performPdfOCR(
   onProgress?: (pageIndex: number, progress: number) => void
 ): Promise<StructuredOcrResult> {
   const pdfjsLib = await import('pdfjs-dist');
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfData) });
   const pdf = await loadingTask.promise;
@@ -235,9 +204,6 @@ export async function performPdfOCR(
     deskew: false,
     rotate: false
   };
-
-  const requestedLangs = language.split('+');
-  const allAreBundled = requestedLangs.every(l => l === 'eng' || l === 'ind');
 
   const batchSize = 4;
   for (let startPage = 1; startPage <= numPages; startPage += batchSize) {
@@ -267,7 +233,6 @@ export async function performPdfOCR(
               finalCanvas,
               language,
               prepOpts.rotationThreshold ?? 3.0,
-              allAreBundled
             );
             finalCanvas = rotationResult.rotatedCanvas;
           } catch (e) {
@@ -346,4 +311,3 @@ export async function performPdfOCR(
     pages
   };
 }
-

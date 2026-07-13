@@ -1,8 +1,11 @@
-const CACHE_NAME = 'ocular-vault-cache-v1';
+const CACHE_NAME = 'ocular-vault-cache-v2';
 const ASSETS = [
   '/',
   '/manifest.json',
   '/icon.svg',
+  '/pdf.worker.min.mjs',
+  '/tessdata/eng.traineddata.gz',
+  '/tessdata/ind.traineddata.gz',
 ];
 
 self.addEventListener('install', (event) => {
@@ -33,12 +36,12 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  // Do not cache API proxy requests, Webpack HMR, or local development files
+  // Do not cache API requests or development-only assets. Production Next.js
+  // chunks are cached at runtime so an installed app can cold-start offline.
   if (
     url.pathname.startsWith('/api') || 
     url.pathname.includes('webpack') || 
-    url.pathname.includes('hot-reloader') ||
-    url.pathname.includes('_next/')
+    url.pathname.includes('hot-reloader')
   ) {
     return;
   }
@@ -67,7 +70,8 @@ self.addEventListener('fetch', (event) => {
 
         return networkResponse;
       }).catch(() => {
-        // Fallback or ignore
+        if (event.request.mode === 'navigate') return caches.match('/');
+        return Response.error();
       });
     })
   );

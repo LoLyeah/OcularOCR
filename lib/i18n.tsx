@@ -70,7 +70,7 @@ export const translationDict: Translations = {
     id: 'Masukkan kata sandi vault Anda untuk mendekripsi semua data Anda secara lokal.' 
   },
   vaultPasswordPlaceholder: { en: 'Vault Password', id: 'Kata Sandi Vault' },
-  passwordLengthError: { en: 'Password must be at least 4 characters.', id: 'Kata sandi harus minimal 4 karakter.' },
+  passwordLengthError: { en: 'New vault passwords must be at least 12 characters.', id: 'Kata sandi vault baru harus minimal 12 karakter.' },
   unlocking: { en: 'Unlocking...', id: 'Membuka Kunci...' },
   unlockVaultBtn: { en: 'UNLOCK VAULT', id: 'BUKA KUNCI VAULT' },
   orUnlockBiometricsLink: { en: 'OR UNLOCK WITH BIOMETRICS', id: 'ATAU BUKA KUNCI DENGAN BIOMETRIK' },
@@ -89,9 +89,26 @@ export const translationDict: Translations = {
   saveFailedToast: { en: 'Save failed', id: 'Gagal menyimpan' },
   failedSaveSettings: { en: 'Failed to encrypt and store the settings.', id: 'Gagal mengenkripsi dan menyimpan pengaturan.' },
   settingsTitle: { en: 'Settings', id: 'Pengaturan' },
+  autoLockLabel: { en: 'Automatic vault locking', id: 'Penguncian vault otomatis' },
+  autoLockHelp: { en: 'Discard the active encryption key after a period without interaction.', id: 'Hapus kunci enkripsi aktif setelah beberapa waktu tanpa interaksi.' },
+  autoLockMinutes: { en: '{{minutes}} minutes', id: '{{minutes}} menit' },
+  importReplaceConfirm: {
+    en: 'Replace the current vault with this backup containing {{count}} documents? The current vault will only be replaced after the backup passes validation.',
+    id: 'Ganti vault saat ini dengan cadangan berisi {{count}} dokumen? Vault saat ini hanya akan diganti setelah cadangan lolos validasi.'
+  },
 
   // Settings - AI Tab
   aiProviderLabel: { en: 'AI Provider', id: 'AI Provider' },
+  localOnlyModeLabel: { en: 'Strict local-only mode', id: 'Mode lokal ketat' },
+  localOnlyModeHelp: {
+    en: 'Blocks AI requests unless the endpoint runs on this device (localhost).',
+    id: 'Memblokir permintaan AI kecuali endpoint berjalan di perangkat ini (localhost).'
+  },
+  cloudConsentLabel: { en: 'Allow cloud AI processing', id: 'Izinkan pemrosesan AI cloud' },
+  cloudConsentHelp: {
+    en: 'Document images or extracted text may be sent to the selected remote provider. Your vault password and encryption key are never sent.',
+    id: 'Gambar dokumen atau teks hasil ekstraksi dapat dikirim ke provider jarak jauh yang dipilih. Kata sandi dan kunci enkripsi vault tidak pernah dikirim.'
+  },
   modelNameLabel: { en: 'Model Name', id: 'Model Name' },
   recommendedFlash: { en: 'Recommended: gemini-3.5-flash', id: 'Direkomendasikan: gemini-3.5-flash' },
   apiKeyLabel: { en: 'API Key', id: 'API Key' },

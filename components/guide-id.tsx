@@ -803,7 +803,7 @@ export function GuideID() {
 
                 <div className="mt-3 text-[9px] text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-900 pt-2 flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                  <span>PBKDF2 SHA-256 (100.000 iterasi) + AES-GCM Encrypted.</span>
+                  <span>Parameter PBKDF2 SHA-256 berversi (600.000 iterasi untuk vault baru) + enkripsi AES-GCM.</span>
                 </div>
               </div>
             </div>

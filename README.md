@@ -18,13 +18,13 @@
 
 **OcularOCR** is a Progressive Web App (PWA) designed to safely store, organize, and perform Optical Character Recognition (OCR) on your sensitive documents. 
 
-Traditional OCR tools require uploading your sensitive documents (invoices, tax forms, IDs) to remote servers in plain text. OcularOCR solves this by introducing a **zero-knowledge local-encrypted vault**. All files and extracted data are encrypted directly in your browser using standard cryptography before being stored in IndexedDB. No plain text data ever leaves your device.
+Traditional OCR tools require uploading sensitive documents (invoices, tax forms, IDs) to remote servers. OcularOCR stores files and extracted data in a **local encrypted vault**: data is encrypted in your browser before it is written to IndexedDB. Local OCR keeps document content on the device. Cloud AI features are optional, require explicit consent, and send the selected page images or extracted text to the configured provider.
 
 ---
 
 ## ✨ Core Features
 
-*   **🔒 Zero-Knowledge Encrypted Vault**: All documents, metadata, tags, and AI summaries are encrypted client-side using **AES-GCM (256-bit)** keys derived from a password you define (using **PBKDF2** with **SHA-256** and **100,000 iterations**).
+*   **🔒 Local Encrypted Vault**: Documents, metadata, tags, settings, and AI summaries are encrypted client-side using **AES-GCM (256-bit)** keys. New vaults use PBKDF2-SHA-256 with 600,000 iterations; existing vaults retain their versioned derivation settings for compatibility.
 *   **🤖 Multi-Engine OCR & Vision**:
     *   **Cloud AI OCR**: Seamlessly integrates with **Google Gemini API** (utilizing fast, low-latency models like `gemini-3.5-flash` via the `@google/genai` SDK) and **OpenAI API** (`gpt-4o`).
     *   **Local AI OCR**: Configurable endpoint support for **Ollama** or custom local AI APIs (e.g., Groq) for fully self-hosted cloud extractions.
@@ -48,7 +48,7 @@ OcularOCR uses a strict **local-first, zero-knowledge** architecture:
 ```mermaid
 graph TD
     A[User Input Password] --> B[PBKDF2 Key Derivation]
-    B -->|100,000 Iterations| C[CryptoKey AES-GCM 256]
+    B -->|Versioned KDF Parameters| C[CryptoKey AES-GCM 256]
     D[Upload PDF / Image] --> E{Select OCR Engine}
     E -->|Local Offline| F[Tesseract.js OCR]
     E -->|Cloud/Local AI| G[Gemini / OpenAI / Ollama]
@@ -61,8 +61,9 @@ graph TD
 ```
 
 1.  **Key Derivation**: When unlocking your vault, your password is put through a PBKDF2 derivation function with a cryptographic salt unique to your browser storage.
-2.  **Encryption**: Documents, tags, OCR results, and summaries are individually encrypted with their own unique initialization vectors (IVs) and stored in `IndexedDB` via `idb-keyval`.
-3.  **On-the-Fly Decryption**: When viewing a document, the ciphertext is decrypted temporarily in browser memory. Locking the vault discards the crypto keys instantly.
+2.  **Encryption**: Documents, document metadata, tags, OCR results, settings, and summaries are encrypted with unique initialization vectors (IVs) and stored in `IndexedDB` via `idb-keyval`.
+3.  **AI privacy boundary**: Local Tesseract OCR stays on-device. Remote AI OCR, tagging, cleanup, or summaries require explicit cloud-processing consent and send only the content needed for that operation to the configured provider.
+4.  **On-the-Fly Decryption**: When viewing a document, the ciphertext is decrypted temporarily in browser memory. Locking the vault discards the crypto keys instantly.
 
 ---
 

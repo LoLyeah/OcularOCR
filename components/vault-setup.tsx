@@ -10,7 +10,15 @@ import {
   unwrapMasterKey,
   base64ToArrayBuffer
 } from '@/lib/crypto';
-import { getSalt, clearVault, getVerificationToken, setVerificationToken } from '@/lib/storage';
+import {
+  CURRENT_KDF_ITERATIONS,
+  getKdfIterations,
+  getSalt,
+  clearVault,
+  getVerificationToken,
+  setKdfIterations,
+  setVerificationToken,
+} from '@/lib/storage';
 import { Lock, Unlock, AlertTriangle, ShieldCheck, ShieldOff, Loader2, Fingerprint } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '@/lib/i18n';
@@ -43,7 +51,7 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
         if (mode === 'unencrypted') {
            try {
              const salt = await getSalt();
-             const key = await deriveKey('OPEN_VAULT_MODE_XYZ_123', salt);
+             const key = await deriveKey('OPEN_VAULT_MODE_XYZ_123', salt, getKdfIterations());
              onUnlock(key);
              return;
            } catch(err) {
@@ -101,7 +109,8 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
     setIsLoading(true);
     try {
       const salt = await getSalt();
-      const key = await deriveKey('OPEN_VAULT_MODE_XYZ_123', salt);
+      setKdfIterations(CURRENT_KDF_ITERATIONS);
+      const key = await deriveKey('OPEN_VAULT_MODE_XYZ_123', salt, CURRENT_KDF_ITERATIONS);
       const { encrypted, iv } = await encryptString('VAULT_VALID', key);
       await setVerificationToken(encrypted, iv);
       localStorage.setItem('vault_mode', 'unencrypted');
@@ -151,18 +160,24 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 4) {
-      setError(t('passwordLengthError'));
-      return;
-    }
-    
     setIsLoading(true);
     setError('');
     try {
-      const salt = await getSalt();
-      const key = await deriveKey(password, salt);
-      
       const verifyToken = await getVerificationToken();
+      if (!verifyToken && password.length < 12) {
+        setError(t('passwordLengthError'));
+        return;
+      }
+      if (verifyToken && password.length === 0) {
+        setError(t('incorrectPassword'));
+        return;
+      }
+
+      const salt = await getSalt();
+      const iterations = verifyToken ? getKdfIterations() : CURRENT_KDF_ITERATIONS;
+      if (!verifyToken) setKdfIterations(iterations);
+      const key = await deriveKey(password, salt, iterations);
+
       if (!verifyToken) {
         // First time setup
         const { encrypted, iv } = await encryptString('VAULT_VALID', key);

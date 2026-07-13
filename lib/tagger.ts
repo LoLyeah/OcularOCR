@@ -1,5 +1,6 @@
 import { AISettings } from './storage';
 import { GoogleGenAI, Type } from '@google/genai';
+import { assertAiRequestAllowed } from './ai-policy';
 
 // Document categories list for suggestion
 export const STANDARD_CATEGORIES = [
@@ -90,6 +91,7 @@ export function suggestTagsLocal(text: string, filename: string): string[] {
  * AI-based tag classification using the configured AI provider.
  */
 export async function suggestTagsAI(text: string, filename: string, settings: AISettings): Promise<string[]> {
+  assertAiRequestAllowed(settings);
   const prompt = `You are an intelligent document classification system. 
 Analyze the following document text and filename, then suggest 1 to 4 relevant category labels or tags for this document (e.g., 'Invoice', 'Receipt', 'Contract', 'ID/License', 'Statement', 'Letter', 'Resume', 'Report', 'Manual', 'Medical', 'Tax', or other fitting highly specific categories).
 

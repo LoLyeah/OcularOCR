@@ -21,6 +21,45 @@ export default function Home() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!cryptoKey) return;
+    const getTimeoutMs = () => Math.max(1, Number(localStorage.getItem('vault_auto_lock_minutes')) || 15) * 60_000;
+    let timeoutMs = getTimeoutMs();
+    let lastActivity = Date.now();
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const lockIfIdle = () => {
+      const remaining = timeoutMs - (Date.now() - lastActivity);
+      if (remaining <= 0) setCryptoKey(null);
+      else timeoutId = setTimeout(lockIfIdle, remaining);
+    };
+    const registerActivity = () => {
+      lastActivity = Date.now();
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(lockIfIdle, timeoutMs);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') lockIfIdle();
+    };
+    const handleConfigChange = () => {
+      timeoutMs = getTimeoutMs();
+      registerActivity();
+    };
+
+    const activityEvents: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'touchstart'];
+    activityEvents.forEach((event) => window.addEventListener(event, registerActivity, { passive: true }));
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('vault-auto-lock-change', handleConfigChange);
+    timeoutId = setTimeout(lockIfIdle, timeoutMs);
+
+    return () => {
+      clearTimeout(timeoutId);
+      activityEvents.forEach((event) => window.removeEventListener(event, registerActivity));
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('vault-auto-lock-change', handleConfigChange);
+    };
+  }, [cryptoKey]);
+
   if (isInitializing) {
     return (
       <div className="flex h-screen items-center justify-center bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
@@ -50,5 +89,3 @@ export default function Home() {
     </AnimatePresence>
   );
 }
-
-

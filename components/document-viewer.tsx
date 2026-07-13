@@ -136,7 +136,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         if (doc.type.includes('pdf')) {
           setPdfBuffer(decryptedBuffer);
           const pdfjsLib = await import('pdfjs-dist');
-          pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
           const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(decryptedBuffer.slice(0)) });
           const pdf = await loadingTask.promise;
           setPdfDocument(pdf);
@@ -647,7 +647,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         ocrTextIv: iv,
         encryptedTags,
         tagsIv
-      });
+      }, cryptoKey);
       toast({
         title: language === 'id' ? "Teks berhasil diekstrak" : "Text extracted successfully",
         variant: "success"
@@ -745,7 +745,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         ...docToSave,
         encryptedOcrText: encrypted,
         ocrTextIv: iv,
-      });
+      }, cryptoKey);
 
       setOcrText(newConcatenatedText);
       setStructuredOcr(updatedOcrResult);
@@ -874,7 +874,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         ...docToSave,
         encryptedSummary: encrypted,
         summaryIv: iv
-      });
+      }, cryptoKey);
       toast({
         title: language === 'id' ? "Ringkasan berhasil dibuat" : "Summary generated",
         variant: "success"
@@ -934,7 +934,7 @@ settings = JSON.parse(decryptedStr);
         ...docToSave,
         encryptedTags: encrypted,
         tagsIv: iv
-      });
+      }, cryptoKey);
       toast({
         title: language === 'id' ? `Tag "${trimmed}" ditambahkan` : `Tag "${trimmed}" added`,
         variant: "success"
@@ -955,7 +955,7 @@ settings = JSON.parse(decryptedStr);
         ...docToSave,
         encryptedTags: encrypted,
         tagsIv: iv
-      });
+      }, cryptoKey);
       toast({
         title: language === 'id' ? "Tag dihapus" : "Tag removed",
         variant: "success"

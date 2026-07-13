@@ -74,7 +74,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     enablePostOcrCorrection: false,
     postOcrCorrectionPrompt: '',
     handwritingMode: false,
-    structuredLlmOcr: false
+    structuredLlmOcr: false,
+    localOnlyMode: false,
+    cloudProcessingConsent: false,
   });
   
   // Keep track of provider-specific inputs so they don't bleed into each other
@@ -89,6 +91,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
   const [initialFontSize, setInitialFontSize] = useState<'small' | 'medium' | 'large'>('medium');
+  const [autoLockMinutes, setAutoLockMinutes] = useState(15);
   
   const [confirmReset, setConfirmReset] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -124,6 +127,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       const currentFontSize = (storedFontSize === 'small' || storedFontSize === 'large') ? storedFontSize : 'medium';
       setFontSize(currentFontSize as any);
       setInitialFontSize(currentFontSize as any);
+
+      const storedAutoLock = Number(localStorage.getItem('vault_auto_lock_minutes'));
+      setAutoLockMinutes([5, 15, 30, 60].includes(storedAutoLock) ? storedAutoLock : 15);
 
       // Load AI settings
       const encrypted = await getSettings();
@@ -316,6 +322,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       if (!parsed.salt || !parsed.documents) {
         throw new Error('File does not match the OcularOCR backup format.');
       }
+      if (!window.confirm(t('importReplaceConfirm', { count: Array.isArray(parsed.documents) ? parsed.documents.length : 0 }))) {
+        return;
+      }
       
       await importVaultEncrypted(text);
       toast({
@@ -366,6 +375,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
 
       // Save Font Size settings
       localStorage.setItem('vault_font_size', fontSize);
+      localStorage.setItem('vault_auto_lock_minutes', String(autoLockMinutes));
 
       // Save Language settings
       updateActiveLanguage(langLocal);
@@ -524,6 +534,40 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                             {p === 'openai' ? 'OpenAI Compatible' : p === 'ollama' ? 'Ollama (Offline)' : 'Google Gemini'}
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-amber-200 bg-amber-50/70 p-3 dark:border-amber-900/60 dark:bg-amber-950/20 space-y-3">
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          id="localOnlyMode"
+                          checked={settings.localOnlyMode || false}
+                          onChange={(e) => setSettings({
+                            ...settings,
+                            localOnlyMode: e.target.checked,
+                            cloudProcessingConsent: e.target.checked ? false : settings.cloudProcessingConsent,
+                          })}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-900"
+                        />
+                        <label htmlFor="localOnlyMode" className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+                          {t('localOnlyModeLabel')}
+                          <span className="block text-[10px] font-normal leading-relaxed text-slate-600 dark:text-slate-400">{t('localOnlyModeHelp')}</span>
+                        </label>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          id="cloudProcessingConsent"
+                          disabled={settings.localOnlyMode}
+                          checked={!settings.localOnlyMode && !!settings.cloudProcessingConsent}
+                          onChange={(e) => setSettings({ ...settings, cloudProcessingConsent: e.target.checked })}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+                        />
+                        <label htmlFor="cloudProcessingConsent" className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
+                          {t('cloudConsentLabel')}
+                          <span className="block text-[10px] font-normal leading-relaxed text-slate-600 dark:text-slate-400">{t('cloudConsentHelp')}</span>
+                        </label>
                       </div>
                     </div>
 
@@ -994,6 +1038,27 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col gap-4"
                   >
+                    <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">{t('autoLockLabel')}</h3>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">{t('autoLockHelp')}</p>
+                      </div>
+                      <select
+                        value={autoLockMinutes}
+                        onChange={(e) => {
+                          const minutes = Number(e.target.value);
+                          setAutoLockMinutes(minutes);
+                          localStorage.setItem('vault_auto_lock_minutes', String(minutes));
+                          window.dispatchEvent(new Event('vault-auto-lock-change'));
+                        }}
+                        className="rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs text-slate-800 dark:text-slate-200"
+                      >
+                        {[5, 15, 30, 60].map((minutes) => (
+                          <option key={minutes} value={minutes}>{t('autoLockMinutes', { minutes })}</option>
+                        ))}
+                      </select>
+                    </div>
+
                     {/* Passkey Biometric Section */}
                     <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
                       <div>

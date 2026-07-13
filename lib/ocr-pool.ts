@@ -13,8 +13,10 @@ class TesseractWorkerPool {
 
   constructor() {
     if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
-      // Capped at 4 for standard safety, but at least 1
-      this.maxWorkers = Math.min(4, Math.max(1, navigator.hardwareConcurrency));
+      const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+      const memoryCap = deviceMemory !== undefined && deviceMemory <= 4 ? 2 : 4;
+      // Leave one logical core available for rendering and interaction.
+      this.maxWorkers = Math.min(memoryCap, Math.max(1, navigator.hardwareConcurrency - 1));
     }
   }
 
@@ -44,6 +46,15 @@ class TesseractWorkerPool {
       return poolWorker;
     }
 
+    // Recycle an idle worker with the wrong language source instead of waiting
+    // forever when the pool is full of workers from the other source.
+    const recyclable = this.pool.find(pw => !pw.busy);
+    if (recyclable) {
+      await recyclable.worker.terminate();
+      this.pool = this.pool.filter(pw => pw !== recyclable);
+      return this.createNewWorker(languages, allAreBundled);
+    }
+
     // 2. If no idle worker but pool is not full, create a new one
     if (this.pool.length < this.maxWorkers) {
       return this.createNewWorker(languages, allAreBundled);
@@ -53,6 +64,15 @@ class TesseractWorkerPool {
     return new Promise((resolve) => {
       const interval = setInterval(async () => {
         let pw = this.pool.find(w => !w.busy && w.isBundledPath === allAreBundled);
+        const recyclableWorker = !pw ? this.pool.find(w => !w.busy) : undefined;
+        if (!pw && recyclableWorker) {
+          clearInterval(interval);
+          recyclableWorker.busy = true;
+          await recyclableWorker.worker.terminate();
+          this.pool = this.pool.filter(w => w !== recyclableWorker);
+          resolve(await this.createNewWorker(languages, allAreBundled));
+          return;
+        }
         if (pw) {
           clearInterval(interval);
           pw.busy = true;
@@ -143,6 +163,25 @@ class TesseractWorkerPool {
     const promises = images.map((img, i) => runTask(img, i));
     await Promise.all(promises);
     return results;
+  }
+
+  public async recognizeSequential(
+    images: HTMLCanvasElement[],
+    languages: string,
+  ): Promise<number[]> {
+    const requestedLangs = languages.split('+');
+    const allAreBundled = requestedLangs.every(l => l === 'eng' || l === 'ind');
+    const pw = await this.getWorker(languages, allAreBundled);
+    try {
+      const confidences: number[] = [];
+      for (const image of images) {
+        const result = await pw.worker.recognize(image);
+        confidences.push(result.data?.confidence ?? 0);
+      }
+      return confidences;
+    } finally {
+      pw.busy = false;
+    }
   }
 
   /**

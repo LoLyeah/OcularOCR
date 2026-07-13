@@ -1,4 +1,4 @@
-export async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
+export async function deriveKey(password: string, salt: Uint8Array, iterations: number = 100_000): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -11,7 +11,7 @@ export async function deriveKey(password: string, salt: Uint8Array): Promise<Cry
     {
       name: 'PBKDF2',
       salt: salt as unknown as BufferSource,
-      iterations: 100000,
+      iterations,
       hash: 'SHA-256'
     },
     keyMaterial,
@@ -241,5 +241,4 @@ export async function unwrapMasterKey(wrappedData: ArrayBuffer, unwrappingKey: C
     ['encrypt', 'decrypt']
   );
 }
-
 

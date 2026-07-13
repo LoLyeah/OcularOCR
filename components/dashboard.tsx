@@ -26,6 +26,9 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
   return (
     <ToastProvider>
       <div className="flex flex-col h-screen w-full bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+        <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded bg-indigo-600 px-3 py-2 text-xs font-bold text-white focus:not-sr-only">
+          {t('skipToContent')}
+        </a>
         <header className="h-12 flex items-center justify-between px-3 sm:px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 z-20">
           <div className="flex items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -35,6 +38,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
             
             <nav className="flex gap-1 ml-2 sm:ml-6">
               <button 
+                aria-current={activeTab === 'files' && !activeDoc ? 'page' : undefined}
                 onClick={() => { setActiveTab('files'); setActiveDoc(null); }}
                 className={`relative px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-medium rounded transition-colors cursor-pointer ${activeTab === 'files' && !activeDoc ? 'text-slate-800 dark:text-slate-200 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
@@ -54,6 +58,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
                 {t('settings')}
               </button>
               <button 
+                aria-current={activeTab === 'guide' ? 'page' : undefined}
                 onClick={() => { setActiveTab('guide'); setActiveDoc(null); }}
                 className={`relative px-2 sm:px-3 py-1 text-[11px] sm:text-xs font-medium rounded transition-colors flex items-center gap-1 cursor-pointer ${activeTab === 'guide' ? 'text-slate-800 dark:text-slate-200 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'}`}
               >
@@ -90,7 +95,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
           </div>
         </header>
   
-        <main className="flex-1 overflow-hidden relative">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-hidden relative focus:outline-none">
           <AnimatePresence mode="wait">
             {activeTab === 'guide' ? (
               <Suspense fallback={

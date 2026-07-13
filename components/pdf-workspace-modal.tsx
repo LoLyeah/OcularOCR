@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
-import { Copy, GripVertical, Layers3, Loader2, RotateCcw, RotateCw, Save, Scissors, Trash2, Undo2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, GripVertical, Layers3, Loader2, RotateCcw, RotateCw, Save, Scissors, Trash2, Undo2, X } from 'lucide-react';
 import { decryptBuffer, encryptBuffer } from '@/lib/crypto';
 import { getPdfPageCount, renderPdfThumbnails } from '@/lib/pdf';
 import {
   buildPdfFromPlan,
   deletePdfPages,
   movePdfPage,
+  moveSelectedPdfPages,
   PdfPagePlan,
   PdfWorkspaceSource,
   rotatePdfPages,
@@ -14,6 +15,7 @@ import {
 import { DocumentEntry, saveDocument } from '@/lib/storage';
 import { useI18n } from '@/lib/i18n';
 import { useToast } from './toast';
+import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 const MAX_WORKSPACE_PAGES = 200;
 const MAX_WORKSPACE_BYTES = 100 * 1024 * 1024;
@@ -52,6 +54,7 @@ export function PdfWorkspaceModal({ documents, cryptoKey, onClose, onSaved }: Pd
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const draggedIndex = useRef<number | null>(null);
+  const dialogRef = useDialogFocus<HTMLElement>(onClose, { closeOnEscape: !isSaving });
 
   useEffect(() => {
     let active = true;
@@ -179,10 +182,10 @@ export function PdfWorkspaceModal({ documents, cryptoKey, onClose, onSaved }: Pd
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5">
-      <section className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="pdf-workspace-title" tabIndex={-1} className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+            <h2 id="pdf-workspace-title" className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
               <Layers3 className="h-4 w-4 text-indigo-600" /> {t('pdfWorkspaceTitle')}
             </h2>
             <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400">
@@ -197,6 +200,12 @@ export function PdfWorkspaceModal({ documents, cryptoKey, onClose, onSaved }: Pd
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-900">
           <button type="button" onClick={undo} disabled={history.length === 0 || isLoading || isSaving} className="pdf-tool-button">
             <Undo2 className="h-3.5 w-3.5" /> {t('undo')}
+          </button>
+          <button type="button" onClick={() => commitPages(moveSelectedPdfPages(pages, selectedIds, -1))} disabled={selectedCount === 0 || isSaving} className="pdf-tool-button">
+            <ArrowLeft className="h-3.5 w-3.5" /> {t('moveEarlier')}
+          </button>
+          <button type="button" onClick={() => commitPages(moveSelectedPdfPages(pages, selectedIds, 1))} disabled={selectedCount === 0 || isSaving} className="pdf-tool-button">
+            <ArrowRight className="h-3.5 w-3.5" /> {t('moveLater')}
           </button>
           <button type="button" onClick={() => commitPages(rotatePdfPages(pages, selectedIds, -90) as WorkspacePage[])} disabled={selectedCount === 0 || isSaving} className="pdf-tool-button">
             <RotateCcw className="h-3.5 w-3.5" /> {t('rotateLeft')}
@@ -242,6 +251,7 @@ export function PdfWorkspaceModal({ documents, cryptoKey, onClose, onSaved }: Pd
                     draggedIndex.current = null;
                   }}
                   onClick={() => toggleSelection(page.id)}
+                  aria-pressed={selectedIds.has(page.id)}
                   className={`group relative rounded-lg border p-2 text-left transition ${selectedIds.has(page.id) ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200 dark:bg-indigo-950/30 dark:ring-indigo-900' : 'border-slate-200 bg-white hover:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-600'}`}
                 >
                   <GripVertical className="absolute left-1 top-1 h-3.5 w-3.5 text-slate-300 opacity-0 transition group-hover:opacity-100" />

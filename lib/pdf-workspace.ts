@@ -26,6 +26,28 @@ export function movePdfPage<T>(pages: readonly T[], fromIndex: number, toIndex: 
   return next;
 }
 
+export function moveSelectedPdfPages<T extends { id: string }>(
+  pages: readonly T[],
+  selectedIds: ReadonlySet<string>,
+  direction: -1 | 1,
+): T[] {
+  const next = [...pages];
+  if (direction === -1) {
+    for (let index = 1; index < next.length; index += 1) {
+      if (selectedIds.has(next[index].id) && !selectedIds.has(next[index - 1].id)) {
+        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+      }
+    }
+  } else {
+    for (let index = next.length - 2; index >= 0; index -= 1) {
+      if (selectedIds.has(next[index].id) && !selectedIds.has(next[index + 1].id)) {
+        [next[index], next[index + 1]] = [next[index + 1], next[index]];
+      }
+    }
+  }
+  return next;
+}
+
 export function rotatePdfPages(pages: readonly PdfPagePlan[], selectedIds: ReadonlySet<string>, delta: number): PdfPagePlan[] {
   return pages.map((page) => selectedIds.has(page.id)
     ? { ...page, rotation: normalizeRotation(page.rotation + delta) }

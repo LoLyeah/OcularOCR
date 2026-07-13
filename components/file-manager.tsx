@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe, Layers3 } from 'lucide-react';
 import { listDecryptedDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings, StructuredOcrResult } from '@/lib/storage';
@@ -12,6 +12,7 @@ import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
 import { parseOcrPages } from './document-viewer';
 import { PdfWorkspaceModal } from './pdf-workspace-modal';
+import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -53,6 +54,12 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [pdfWorkspaceDocs, setPdfWorkspaceDocs] = useState<DocumentEntry[] | null>(null);
   const [customAlert, setCustomAlert] = useState<{ title: string; message: string } | null>(null);
+  const closeDeleteConfirm = useCallback(() => setDeleteConfirmId(null), []);
+  const closeBulkDeleteConfirm = useCallback(() => setShowBulkDeleteConfirm(false), []);
+  const closeCustomAlert = useCallback(() => setCustomAlert(null), []);
+  const deleteDialogRef = useDialogFocus<HTMLDivElement>(closeDeleteConfirm, { enabled: !!deleteConfirmId });
+  const bulkDeleteDialogRef = useDialogFocus<HTMLDivElement>(closeBulkDeleteConfirm, { enabled: showBulkDeleteConfirm });
+  const alertDialogRef = useDialogFocus<HTMLDivElement>(closeCustomAlert, { enabled: !!customAlert });
 
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState('');
@@ -1138,6 +1145,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
           >
             <motion.div 
+              ref={deleteDialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-document-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1148,7 +1160,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{t('deleteDocSingleTitle')}?</h3>
+                  <h3 id="delete-document-title" className="text-sm font-bold text-slate-900 dark:text-slate-100">{t('deleteDocSingleTitle')}?</h3>
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
                     {language === 'id' 
                       ? `Apakah Anda yakin ingin menghapus "${docs.find(d => d.id === deleteConfirmId)?.name}"? Tindakan ini tidak dapat dibatalkan dan file terenkripsi akan dihancurkan.`
@@ -1185,6 +1197,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
           >
             <motion.div 
+              ref={bulkDeleteDialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="bulk-delete-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1195,7 +1212,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  <h3 id="bulk-delete-title" className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     {t('bulkDeleteConfirmTitle', { count: selectedDocs.size })}
                   </h3>
                   <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -1232,6 +1249,11 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
           >
             <motion.div 
+              ref={alertDialogRef}
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="custom-alert-title"
+              tabIndex={-1}
               initial={{ opacity: 0, scale: 0.95, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -1239,7 +1261,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
             >
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 mb-2">
                 <AlertTriangle className="h-4 w-4" />
-                <h3 className="text-sm font-bold">{customAlert.title}</h3>
+                <h3 id="custom-alert-title" className="text-sm font-bold">{customAlert.title}</h3>
               </div>
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
                 {customAlert.message}

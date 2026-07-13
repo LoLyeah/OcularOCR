@@ -5,6 +5,7 @@ import { AISettings, StructuredOcrResult } from '@/lib/storage';
 import { performOCR } from '@/lib/ocr';
 import { extractTextFromImages } from '@/lib/ai';
 import { useI18n } from '@/lib/i18n';
+import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 interface OcrDiffModalProps {
   canvases: HTMLCanvasElement[];
@@ -21,6 +22,7 @@ export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose,
   const [llmText, setLlmText] = useState<string | null>(null);
   const [loading, setLoading] = useState<'tesseract' | 'llm' | 'both' | null>('both');
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useDialogFocus<HTMLDivElement>(onClose);
 
   useEffect(() => {
     async function runBoth() {
@@ -79,6 +81,11 @@ export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose,
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm px-4"
     >
       <motion.div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ocr-compare-title"
+        tabIndex={-1}
         onClick={e => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -86,10 +93,10 @@ export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose,
         className="flex flex-col w-full max-w-4xl h-[80vh] bg-white dark:bg-slate-900 rounded-lg shadow-xl overflow-hidden"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+          <h2 id="ocr-compare-title" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
             Compare OCR Engines
           </h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer">
+          <button onClick={onClose} aria-label={t('close')} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer">
             <X className="h-4 w-4" />
           </button>
         </div>

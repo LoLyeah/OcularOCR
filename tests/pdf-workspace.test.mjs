@@ -7,6 +7,7 @@ import {
   buildPdfFromPlan,
   deletePdfPages,
   movePdfPage,
+  moveSelectedPdfPages,
   normalizeRotation,
   rotatePdfPages,
 } from '../lib/pdf-workspace.ts';
@@ -32,6 +33,8 @@ test('page plan helpers reorder, rotate, and delete immutably', () => {
   assert.deepEqual(pages.map(({ id }) => id), ['a', 'b', 'c']);
   assert.equal(rotatePdfPages(pages, new Set(['b']), -90)[1].rotation, 270);
   assert.deepEqual(deletePdfPages(pages, new Set(['a', 'c'])).map(({ id }) => id), ['b']);
+  assert.deepEqual(moveSelectedPdfPages(pages, new Set(['b', 'c']), -1).map(({ id }) => id), ['b', 'c', 'a']);
+  assert.deepEqual(moveSelectedPdfPages(pages, new Set(['a', 'b']), 1).map(({ id }) => id), ['c', 'a', 'b']);
   assert.equal(normalizeRotation(450), 90);
 });
 

@@ -40,6 +40,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 *   **📁 Smart Document Manager**: Search, filter, tag, and view your documents securely inside a unified, responsive dashboard.
 *   **🧰 Local PDF Workspace**: Merge PDFs, reorder or rotate pages, duplicate and delete pages, extract selections, undo edits, and save the result as a new encrypted PDF without modifying the originals.
 *   **🛟 Reliability & Recovery**: Recoverable crash screens keep failures away from raw vault data, while storage diagnostics report quota pressure and browser cleanup protection before local data is at risk.
+*   **♿ Release Readiness**: Keyboard-safe dialogs, visible focus, skip navigation, reduced-motion support, accessible PDF reordering, and automated CI gates prepare the app for 1.0.
 
 ---
 

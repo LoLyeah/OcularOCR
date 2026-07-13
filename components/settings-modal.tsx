@@ -14,6 +14,7 @@ import {
   removeLanguagePack,
 } from '@/lib/offline';
 import { formatStorageBytes, getStorageHealth, requestPersistentStorage, StorageHealth } from '@/lib/storage-health';
+import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
@@ -111,6 +112,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const dialogRef = useDialogFocus<HTMLDivElement>(onClose, { enabled: !isLoading });
   const { toast } = useToast();
 
   const [isPrfSupported, setIsPrfSupported] = useState(false);
@@ -536,6 +538,11 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm px-0 md:px-4"
     >
       <motion.div 
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -544,7 +551,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       >
         {/* Sidebar */}
         <div className="w-full md:w-48 bg-slate-50 dark:bg-slate-800/50 p-3 md:p-4 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex flex-row md:flex-col gap-2 shrink-0 overflow-x-auto custom-scrollbar">
-          <h2 className="hidden md:block mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2">{t('settingsTitle')}</h2>
+          <h2 id="settings-modal-title" className="hidden md:block mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2">{t('settingsTitle')}</h2>
           
           <button
             type="button"

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe } from 'lucide-react';
+import { UploadCloud, File, Trash2, Search, Tag, Download, CheckSquare, Square, CheckCircle2, ScanText, Loader2, AlertTriangle, X, Link, Globe, Layers3 } from 'lucide-react';
 import { listDecryptedDocuments, saveDocument, deleteDocument, DocumentEntry, getSettings, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { encryptBuffer, encryptString, decryptString, decryptBuffer } from '@/lib/crypto';
 import { renderPdfToCanvas, renderPdfPageToCanvas, getPdfPageCount } from '@/lib/pdf';
@@ -11,6 +11,7 @@ import { getTagColors } from '@/lib/utils';
 import { useToast } from './toast';
 import { useI18n } from '@/lib/i18n';
 import { parseOcrPages } from './document-viewer';
+import { PdfWorkspaceModal } from './pdf-workspace-modal';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
@@ -50,6 +51,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [pdfWorkspaceDocs, setPdfWorkspaceDocs] = useState<DocumentEntry[] | null>(null);
   const [customAlert, setCustomAlert] = useState<{ title: string; message: string } | null>(null);
 
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -961,6 +963,14 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                       <button onClick={handleBulkExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-300 rounded text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-800 transition-colors shadow-sm cursor-pointer">
                         <Download className="h-3.5 w-3.5" /> {t('exportPdfBtn')}
                       </button>
+                      {docs.filter((doc) => selectedDocs.has(doc.id) && doc.type === 'application/pdf').length === selectedDocs.size && (
+                        <button
+                          onClick={() => setPdfWorkspaceDocs(docs.filter((doc) => selectedDocs.has(doc.id) && doc.type === 'application/pdf'))}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 border border-indigo-600 text-white rounded text-xs font-bold hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
+                        >
+                          <Layers3 className="h-3.5 w-3.5" /> {t('pdfWorkspaceBtn')}
+                        </button>
+                      )}
                       <button onClick={() => setShowBulkDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 rounded text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors shadow-sm cursor-pointer">
                         <Trash2 className="h-3.5 w-3.5" /> {t('bulkDeleteBtn')}
                       </button>
@@ -1105,6 +1115,18 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
           </div>
         )}
       </div>
+
+      {pdfWorkspaceDocs && (
+        <PdfWorkspaceModal
+          documents={pdfWorkspaceDocs}
+          cryptoKey={cryptoKey}
+          onClose={() => setPdfWorkspaceDocs(null)}
+          onSaved={async () => {
+            await loadDocs();
+            setSelectedDocs(new Set());
+          }}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <AnimatePresence>

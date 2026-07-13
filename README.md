@@ -38,6 +38,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 *   **🚨 Self-Destruct Reset Mechanism**: One-click vault wipe option in settings to securely erase all IndexedDB collections, cryptographic salts, credentials, and cookies.
 *   **📱 Progressive Web App (PWA)**: Install OcularOCR to your desktop or mobile home screen. The Offline OCR settings show readiness, prepare the app shell, and manage persistent language packs.
 *   **📁 Smart Document Manager**: Search, filter, tag, and view your documents securely inside a unified, responsive dashboard.
+*   **🛟 Reliability & Recovery**: Recoverable crash screens keep failures away from raw vault data, while storage diagnostics report quota pressure and browser cleanup protection before local data is at risk.
 
 ---
 

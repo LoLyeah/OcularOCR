@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, BrainCircuit, Palette, ScanText, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download } from 'lucide-react';
+import { X, Check, BrainCircuit, Palette, ScanText, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download, HardDrive } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, getSettings, saveSettings, clearVault, exportVaultEncrypted, importVaultEncrypted, getSalt } from '@/lib/storage';
 import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPrf, wrapMasterKey, arrayBufferToBase64, deriveKeyFromPrf } from '@/lib/crypto';
@@ -13,6 +13,7 @@ import {
   OCR_LANGUAGES,
   removeLanguagePack,
 } from '@/lib/offline';
+import { formatStorageBytes, getStorageHealth, requestPersistentStorage, StorageHealth } from '@/lib/storage-health';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
@@ -122,6 +123,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   const [downloadingLanguage, setDownloadingLanguage] = useState<string | null>(null);
   const [isPreparingOffline, setIsPreparingOffline] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [storageHealth, setStorageHealth] = useState<StorageHealth | null>(null);
+  const [isRequestingPersistence, setIsRequestingPersistence] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -144,6 +147,16 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       window.removeEventListener('ocular-offline-status', handleStatus);
       window.removeEventListener('online', handleStatus);
       window.removeEventListener('offline', handleStatus);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getStorageHealth().then((health) => {
+      if (active) setStorageHealth(health);
+    });
+    return () => {
+      active = false;
     };
   }, []);
 
@@ -178,6 +191,17 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       const remaining = settings.ocrLanguages.filter((language) => language !== code);
       setSettings({ ...settings, ocrLanguages: remaining.length > 0 ? remaining : ['eng'] });
     }
+  };
+
+  const handleRequestPersistence = async () => {
+    setIsRequestingPersistence(true);
+    const granted = await requestPersistentStorage();
+    setStorageHealth(await getStorageHealth());
+    setIsRequestingPersistence(false);
+    toast({
+      title: granted ? t('storageProtectionGranted') : t('storageProtectionDenied'),
+      variant: granted ? 'success' : 'info',
+    });
   };
 
   useEffect(() => {
@@ -1133,6 +1157,67 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col gap-4"
                   >
+                    <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                          <HardDrive className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                          {t('storageHealthTitle')}
+                        </h3>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed mt-1">{t('storageHealthHelp')}</p>
+                      </div>
+
+                      {storageHealth === null ? (
+                        <p className="animate-pulse rounded border border-slate-200 bg-white p-2.5 text-[10px] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                          {t('storageMeasuring')}
+                        </p>
+                      ) : !storageHealth.supported ? (
+                        <p className="rounded border border-slate-200 bg-white p-2.5 text-[10px] text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                          {t('storageUnavailable')}
+                        </p>
+                      ) : (
+                        <>
+                          <div>
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-semibold text-slate-600 dark:text-slate-300">{t('storageUsed')}</span>
+                              <span className="font-mono text-slate-500 dark:text-slate-400">
+                                {formatStorageBytes(storageHealth.usage)} / {formatStorageBytes(storageHealth.quota)}
+                              </span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+                              <div
+                                className={`h-full rounded-full ${storageHealth.risk === 'critical' ? 'bg-red-500' : storageHealth.risk === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${(storageHealth.usageRatio ?? 0) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className={`text-[10px] font-bold ${storageHealth.risk === 'critical' ? 'text-red-600 dark:text-red-400' : storageHealth.risk === 'warning' ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                {storageHealth.risk === 'critical' ? t('storageCritical') : storageHealth.risk === 'warning' ? t('storageWarning') : storageHealth.risk === 'healthy' ? t('storageHealthy') : t('storageUnknown')}
+                              </p>
+                              <p className="mt-0.5 text-[9px] text-slate-500 dark:text-slate-400">
+                                {storageHealth.persisted === true
+                                  ? t('storagePersistent')
+                                  : storageHealth.persisted === false
+                                    ? t('storageTemporary')
+                                    : t('storagePersistenceUnknown')}
+                              </p>
+                            </div>
+                            {storageHealth.persisted === false && storageHealth.persistenceSupported && (
+                              <button
+                                type="button"
+                                onClick={handleRequestPersistence}
+                                disabled={isRequestingPersistence}
+                                className="shrink-0 rounded border border-indigo-200 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/20"
+                              >
+                                {isRequestingPersistence ? t('requestingStorageProtection') : t('protectStorageBtn')}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
                     <div className="border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 rounded-xl p-4 flex flex-col gap-3">
                       <div>
                         <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">{t('autoLockLabel')}</h3>

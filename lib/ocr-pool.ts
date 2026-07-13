@@ -103,17 +103,24 @@ class TesseractWorkerPool {
         const langPath = `${window.location.origin}/tessdata`;
         worker = await createWorker(languages, 1, {
           langPath,
+          workerPath: '/tesseract/worker.min.js',
+          corePath: '/tesseract-core',
           gzip: true,
         });
       } catch (err) {
         console.warn('Failed to load local bundled traineddata, falling back to CDN...', err);
         worker = await createWorker(languages, 1, {
+          workerPath: '/tesseract/worker.min.js',
+          corePath: '/tesseract-core',
           gzip: true,
         });
         isBundled = false;
       }
     } else {
       worker = await createWorker(languages, 1, {
+        langPath: `${window.location.origin}/tessdata-dynamic`,
+        workerPath: '/tesseract/worker.min.js',
+        corePath: '/tesseract-core',
         gzip: true,
       });
     }

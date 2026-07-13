@@ -12,6 +12,9 @@ export function useVersionCheck() {
   const isCheckingRef = useRef<boolean>(false);
 
   const checkForUpdate = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return { available: false, version: currentVersion };
+    }
     if (isCheckingRef.current) return;
     isCheckingRef.current = true;
     setIsChecking(true);
@@ -45,19 +48,21 @@ export function useVersionCheck() {
 
   const performUpdate = useCallback(async () => {
     try {
-      // 1. Unregister all service workers
+      // 1. Refresh the service worker without discarding downloaded OCR languages.
       if ('serviceWorker' in navigator) {
         const registrations = await navigator.serviceWorker.getRegistrations();
         for (const registration of registrations) {
-          await registration.unregister();
+          await registration.update();
+          registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
         }
       }
 
-      // 2. Clear all cache storage caches
+      // 2. Clear only versioned application caches. Language-pack caches and
+      // IndexedDB vault data survive updates.
       if ('caches' in window) {
         const cacheKeys = await caches.keys();
         await Promise.all(
-          cacheKeys.map((key) => caches.delete(key))
+          cacheKeys.filter((key) => key.startsWith('ocular-app-cache-')).map((key) => caches.delete(key))
         );
       }
 

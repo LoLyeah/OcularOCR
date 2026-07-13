@@ -1106,7 +1106,7 @@ export function Guide() {
             <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">OFFLINE / PWA INSTALLATION</span>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Run Offline: PWA Installation</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-              OcularOCR works fully offline. You can install it on your mobile device, tablet, or computer. Once installed, it behaves like a native application—launching instantly from your home screen without requiring an internet connection.
+              OcularOCR can keep its app shell, encrypted vault, and local OCR engine on your device. English and Indonesian are included; optional language packs can be downloaded once for offline use.
             </p>
           </div>
 
@@ -1166,7 +1166,7 @@ export function Guide() {
           <div className="p-4 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 flex gap-3 text-xs leading-relaxed text-indigo-800 dark:text-indigo-300">
             <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Offline Sync Note:</span> To use the secure document database, OCR extraction, local search, and text files offline, make sure you have loaded the application and decrypted the vault at least once with an internet connection. Live LLM translation and summaries require an active network connection, unless connected to your private local Ollama server.
+              <span className="font-bold">Prepare before disconnecting:</span> Open Settings → Offline OCR while online and wait for the green readiness status. Download any additional language packs you need there. Live cloud AI translation and summaries still require a network connection; a local Ollama server can provide private AI features on your local network.
             </div>
           </div>
         </div>

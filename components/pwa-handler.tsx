@@ -5,42 +5,47 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Smartphone, ArrowDownToLine, RefreshCw } from 'lucide-react';
 import { useVersionCheck } from '@/hooks/use-version-check';
 import { useI18n } from '@/lib/i18n';
+import { getOfflineReadiness } from '@/lib/offline';
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
 export function PwaHandler() {
   const { t } = useI18n();
-  const { currentVersion, latestVersion, updateAvailable, performUpdate } = useVersionCheck();
+  const { latestVersion, updateAvailable, performUpdate } = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
-  const [deferredPrompt, setDeferredPromptState] = useState<any>(null);
+  const [, setDeferredPromptState] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const deferredPromptRef = useRef<any>(null);
+  const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
-  const setDeferredPrompt = (prompt: any) => {
+  const setDeferredPrompt = (prompt: BeforeInstallPromptEvent | null) => {
     deferredPromptRef.current = prompt;
     setDeferredPromptState(prompt);
   };
 
   useEffect(() => {
+    let promptTimer: ReturnType<typeof setTimeout> | undefined;
     // Check if the app is already running in standalone (installed) mode
     if (window.matchMedia('(display-mode: standalone)').matches) {
       Promise.resolve().then(() => setIsInstalled(true));
-      return;
     }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent browser from automatically showing the native banner
       e.preventDefault();
       // Stash the event so it can be triggered later.
-      setDeferredPrompt(e);
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
       
       // Check if user has already dismissed it once
       const dismissed = localStorage.getItem('pwa_prompt_dismissed');
       if (!dismissed) {
         // Show after a short delay of 4 seconds for a smooth onboarding experience
-        const timer = setTimeout(() => {
+        promptTimer = setTimeout(() => {
           setShowPrompt(true);
         }, 4000);
-        return () => clearTimeout(timer);
       }
     };
 
@@ -55,7 +60,7 @@ export function PwaHandler() {
       const activePrompt = deferredPromptRef.current;
       if (activePrompt) {
         activePrompt.prompt();
-        activePrompt.userChoice.then(({ outcome }: any) => {
+        activePrompt.userChoice.then(({ outcome }) => {
           console.log(`User response to triggered install prompt: ${outcome}`);
           setDeferredPrompt(null);
           setShowPrompt(false);
@@ -67,11 +72,25 @@ export function PwaHandler() {
     window.addEventListener('appinstalled', handleAppInstalled);
     window.addEventListener('trigger-pwa-install', handleTriggerInstall);
 
+    const announceOfflineStatus = async () => {
+      const status = await getOfflineReadiness();
+      window.dispatchEvent(new CustomEvent('ocular-offline-status', { detail: status }));
+    };
+    const handleWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OFFLINE_CACHE_UPDATED') announceOfflineStatus();
+    };
+    const handleConnectivity = () => announceOfflineStatus();
+    navigator.serviceWorker?.addEventListener('message', handleWorkerMessage);
+    window.addEventListener('online', handleConnectivity);
+    window.addEventListener('offline', handleConnectivity);
+
     // Register Service Worker
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => {
-          console.log('ServiceWorker registration successful with scope: ', reg.scope);
+        .then(async (reg) => {
+          await navigator.serviceWorker.ready;
+          (reg.active || reg.waiting || reg.installing)?.postMessage({ type: 'CACHE_OFFLINE_ASSETS' });
+          await announceOfflineStatus();
         })
         .catch((err) => {
           console.error('ServiceWorker registration failed: ', err);
@@ -82,6 +101,10 @@ export function PwaHandler() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
       window.removeEventListener('trigger-pwa-install', handleTriggerInstall);
+      navigator.serviceWorker?.removeEventListener('message', handleWorkerMessage);
+      window.removeEventListener('online', handleConnectivity);
+      window.removeEventListener('offline', handleConnectivity);
+      if (promptTimer) clearTimeout(promptTimer);
     };
   }, []);
 

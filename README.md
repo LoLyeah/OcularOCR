@@ -28,7 +28,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 *   **🤖 Multi-Engine OCR & Vision**:
     *   **Cloud AI OCR**: Seamlessly integrates with **Google Gemini API** (utilizing fast, low-latency models like `gemini-3.5-flash` via the `@google/genai` SDK) and **OpenAI API** (`gpt-4o`).
     *   **Local AI OCR**: Configurable endpoint support for **Ollama** or custom local AI APIs (e.g., Groq) for fully self-hosted cloud extractions.
-    *   **Offline Native OCR**: Integrates **Tesseract.js** to perform OCR directly in your browser without any network connection.
+    *   **Offline Native OCR**: Bundles the Tesseract.js engine plus English and Indonesian models for OCR without a network connection. Additional language packs can be downloaded once and kept for offline use.
 *   **🏷️ Hybrid Auto-Tagging & Categorization**:
     *   **Local Heuristics**: Lightweight rule-based tag matching on filename and document contents (Invoices, Receipts, Contracts, Passports, Statements, Manuals, Medical docs, etc.).
     *   **AI Auto-Tagging**: Uses structured JSON classification schema via configured LLMs.
@@ -36,7 +36,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 *   **🎛️ Advanced AI settings**: Adjust generation temperature, set custom system prompts for OCR extraction or summarization, and choose your tag extraction strategies.
 *   **🎨 Appearance Customization**: Native support for dark/light themes and customizable font sizing (small, medium, large) optimized for document reading.
 *   **🚨 Self-Destruct Reset Mechanism**: One-click vault wipe option in settings to securely erase all IndexedDB collections, cryptographic salts, credentials, and cookies.
-*   **📱 Progressive Web App (PWA)**: Install OcularOCR to your desktop or mobile home screen to run completely offline with offline databases and instant launch speeds.
+*   **📱 Progressive Web App (PWA)**: Install OcularOCR to your desktop or mobile home screen. The Offline OCR settings show readiness, prepare the app shell, and manage persistent language packs.
 *   **📁 Smart Document Manager**: Search, filter, tag, and view your documents securely inside a unified, responsive dashboard.
 
 ---

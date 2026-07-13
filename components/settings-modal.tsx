@@ -6,10 +6,21 @@ import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPr
 import { useToast } from './toast';
 import { useVersionCheck } from '@/hooks/use-version-check';
 import { useI18n, Language } from '@/lib/i18n';
+import {
+  downloadLanguagePack,
+  getDownloadedLanguages,
+  getOfflineReadiness,
+  OCR_LANGUAGES,
+  removeLanguagePack,
+} from '@/lib/offline';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
   onClose: () => void;
+}
+
+function createBackupFileName() {
+  return `ocularocr-vault-backup-${Date.now()}.json`;
 }
 
 export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
@@ -106,7 +117,68 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [offlineStatus, setOfflineStatus] = useState<{ ready: boolean; serviceWorkerRegistered: boolean; missingAssets: string[] } | null>(null);
+  const [downloadedLanguages, setDownloadedLanguages] = useState<Set<string>>(new Set());
+  const [downloadingLanguage, setDownloadingLanguage] = useState<string | null>(null);
+  const [isPreparingOffline, setIsPreparingOffline] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      const [status, languages] = await Promise.all([getOfflineReadiness(), getDownloadedLanguages()]);
+      if (!active) return;
+      setOfflineStatus(status);
+      setDownloadedLanguages(languages);
+      setIsOnline(navigator.onLine);
+      setIsPreparingOffline(false);
+    };
+    const handleStatus = () => refresh();
+    window.addEventListener('ocular-offline-status', handleStatus);
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+    refresh();
+    return () => {
+      active = false;
+      window.removeEventListener('ocular-offline-status', handleStatus);
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+    };
+  }, []);
+
+  const handlePrepareOffline = async () => {
+    setIsPreparingOffline(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({ type: 'CACHE_OFFLINE_ASSETS' });
+    } catch (err) {
+      setIsPreparingOffline(false);
+      toast({ title: t('offlinePrepareFailed'), description: err instanceof Error ? err.message : String(err), variant: 'error' });
+    }
+  };
+
+  const handleLanguageDownload = async (code: string) => {
+    setDownloadingLanguage(code);
+    try {
+      await downloadLanguagePack(code);
+      setDownloadedLanguages(await getDownloadedLanguages());
+      toast({ title: t('languagePackReady'), variant: 'success' });
+    } catch (err) {
+      toast({ title: t('languagePackFailed'), description: err instanceof Error ? err.message : String(err), variant: 'error' });
+    } finally {
+      setDownloadingLanguage(null);
+    }
+  };
+
+  const handleLanguageRemove = async (code: string) => {
+    await removeLanguagePack(code);
+    setDownloadedLanguages(await getDownloadedLanguages());
+    if (settings.ocrLanguages?.includes(code)) {
+      const remaining = settings.ocrLanguages.filter((language) => language !== code);
+      setSettings({ ...settings, ocrLanguages: remaining.length > 0 ? remaining : ['eng'] });
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -290,7 +362,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `ocularocr-vault-backup-${Date.now()}.json`;
+      a.download = createBackupFileName();
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -778,6 +850,34 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                     transition={{ duration: 0.15 }}
                     className="flex flex-col gap-4"
                   >
+                    <div className={`rounded-lg border p-3 ${offlineStatus?.ready ? 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-900/60 dark:bg-emerald-950/20' : 'border-amber-200 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/20'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {offlineStatus?.ready ? t('offlineReadyTitle') : t('offlineNotReadyTitle')}
+                          </h3>
+                          <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-400">
+                            {offlineStatus?.ready
+                              ? t('offlineReadyHelp')
+                              : t('offlineNotReadyHelp', { count: offlineStatus?.missingAssets.length ?? 0 })}
+                          </p>
+                          <p className={`mt-1 text-[9px] font-semibold ${isOnline ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                            {isOnline ? t('networkOnline') : t('networkOffline')}
+                          </p>
+                        </div>
+                        {!offlineStatus?.ready && (
+                          <button
+                            type="button"
+                            onClick={handlePrepareOffline}
+                            disabled={!isOnline || isPreparingOffline}
+                            className="shrink-0 rounded bg-indigo-600 px-2.5 py-1.5 text-[10px] font-bold text-white disabled:opacity-50"
+                          >
+                            {isPreparingOffline ? t('preparingOffline') : t('prepareOfflineBtn')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
                     <div>
                       <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('autoTagStrategyLabel')}</label>
                       <select
@@ -884,48 +984,43 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                         <span className="block text-[9px] text-slate-500 dark:text-slate-500 font-normal uppercase tracking-normal mt-0.5">{t('ocrLanguagesSub')}</span>
                       </label>
 
-                      <div className="flex flex-wrap gap-1.5 mt-1">
-                        {[
-                          { code: 'eng', label: 'English', bundled: true },
-                          { code: 'ind', label: 'Indonesian', bundled: true },
-                          { code: 'spa', label: 'Spanish', bundled: false },
-                          { code: 'fra', label: 'French', bundled: false },
-                          { code: 'deu', label: 'German', bundled: false },
-                          { code: 'chi_sim', label: 'Chinese (Simp)', bundled: false },
-                          { code: 'jpn', label: 'Japanese', bundled: false },
-                          { code: 'ara', label: 'Arabic', bundled: false },
-                          { code: 'hin', label: 'Hindi', bundled: false },
-                        ].map((lang) => {
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-1">
+                        {OCR_LANGUAGES.map((lang) => {
                           const isSelected = (settings.ocrLanguages || ['eng']).includes(lang.code);
+                          const isDownloaded = lang.bundled || downloadedLanguages.has(lang.code);
                           return (
-                            <button
-                              key={lang.code}
-                              type="button"
-                              onClick={() => {
-                                const current = settings.ocrLanguages || ['eng'];
-                                let next;
-                                if (isSelected) {
-                                  if (current.length <= 1) return;
-                                  next = current.filter(c => c !== lang.code);
-                                } else {
-                                  next = [...current, lang.code];
-                                }
-                                setSettings({ ...settings, ocrLanguages: next });
-                              }}
-                              className={`px-2.5 py-1.5 rounded text-[10px] font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                                isSelected 
-                                  ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300' 
-                                  : 'bg-white border-slate-200 text-slate-600 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
-                              }`}
-                            >
-                              {lang.label}
-                              <span className={`w-1.5 h-1.5 rounded-full ${
-                                lang.bundled ? 'bg-green-500' : 'bg-blue-400'
-                              }`} title={lang.bundled ? 'Offline' : 'Requires Download'} />
-                            </button>
+                            <div key={lang.code} className="flex rounded border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 overflow-hidden">
+                              <button
+                                type="button"
+                                disabled={!isDownloaded}
+                                onClick={() => {
+                                  const current = settings.ocrLanguages || ['eng'];
+                                  if (isSelected && current.length <= 1) return;
+                                  const next = isSelected ? current.filter(c => c !== lang.code) : [...current, lang.code];
+                                  setSettings({ ...settings, ocrLanguages: next });
+                                }}
+                                className={`flex-1 px-2.5 py-1.5 text-left text-[10px] font-semibold flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-60 ${isSelected ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${isDownloaded ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                                {lang.label}
+                              </button>
+                              {!lang.bundled && (
+                                <button
+                                  type="button"
+                                  disabled={!isOnline || downloadingLanguage === lang.code}
+                                  onClick={() => isDownloaded ? handleLanguageRemove(lang.code) : handleLanguageDownload(lang.code)}
+                                  title={isDownloaded ? t('removeLanguagePack') : t('downloadLanguagePack')}
+                                  aria-label={`${isDownloaded ? t('removeLanguagePack') : t('downloadLanguagePack')}: ${lang.label}`}
+                                  className="border-l border-slate-200 px-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:hover:bg-slate-800"
+                                >
+                                  {downloadingLanguage === lang.code ? <RefreshCw className="h-3 w-3 animate-spin" /> : isDownloaded ? <X className="h-3 w-3" /> : <Download className="h-3 w-3" />}
+                                </button>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
+                      <p className="text-[9px] text-slate-500 dark:text-slate-400">{t('languagePackLegend')}</p>
                     </div>
 
                     {/* Handwriting Mode */}

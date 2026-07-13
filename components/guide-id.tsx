@@ -1090,7 +1090,7 @@ export function GuideID() {
             <span className="text-[10px] font-bold tracking-widest text-indigo-600 dark:text-indigo-400 uppercase">OFFLINE / INSTALASI PWA</span>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">Jalan Offline: Instalasi PWA</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-              OcularOCR bekerja sepenuhnya offline. Anda dapat menginstalnya di ponsel, tablet, atau komputer. Setelah diinstal, aplikasi ini berperilaku seperti aplikasi native—diluncurkan secara instan dari layar beranda Anda tanpa memerlukan koneksi internet.
+              OcularOCR dapat menyimpan shell aplikasi, brankas terenkripsi, dan mesin OCR lokal di perangkat Anda. Bahasa Inggris dan Indonesia sudah disertakan; paket bahasa tambahan dapat diunduh sekali untuk penggunaan offline.
             </p>
           </div>
 
@@ -1150,7 +1150,7 @@ export function GuideID() {
           <div className="p-4 rounded-lg bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50 flex gap-3 text-xs leading-relaxed text-indigo-800 dark:text-indigo-300">
             <Info className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div>
-              <span className="font-bold">Catatan Sinkronisasi Offline:</span> Untuk menggunakan database dokumen yang aman, ekstraksi OCR, pencarian lokal, dan berkas teks secara offline, pastikan Anda telah memuat aplikasi dan mendekripsi vault setidaknya sekali dengan koneksi internet. Terjemahan dan ringkasan LLM langsung memerlukan koneksi jaringan aktif, kecuali jika terhubung ke server Ollama lokal pribadi Anda.
+              <span className="font-bold">Siapkan sebelum memutus koneksi:</span> Buka Pengaturan → OCR Offline saat online dan tunggu status kesiapan berwarna hijau. Unduh paket bahasa tambahan yang Anda perlukan di sana. Terjemahan dan ringkasan AI cloud tetap memerlukan koneksi jaringan; server Ollama lokal dapat menyediakan fitur AI privat di jaringan lokal Anda.
             </div>
           </div>
         </div>

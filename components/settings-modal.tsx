@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Check, BrainCircuit, Palette, ScanText, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download, HardDrive } from 'lucide-react';
+import { X, Check, BrainCircuit, Palette, ScanText, ShieldAlert, AlertTriangle, RefreshCw, ArrowDownToLine, Fingerprint, FileUp, Download, HardDrive, ExternalLink, Wifi, CircleHelp } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AISettings, getSettings, saveSettings, clearVault, exportVaultEncrypted, importVaultEncrypted, getSalt } from '@/lib/storage';
 import { encryptString, decryptString, isWebAuthnPrfSupported, registerPasskeyPrf, wrapMasterKey, arrayBufferToBase64, deriveKeyFromPrf } from '@/lib/crypto';
@@ -15,6 +15,8 @@ import {
 } from '@/lib/offline';
 import { formatStorageBytes, getStorageHealth, requestPersistentStorage, StorageHealth } from '@/lib/storage-health';
 import { useDialogFocus } from '@/hooks/use-dialog-focus';
+import { getProvider, PROVIDERS, resolveChatEndpoint, resolveProviderModel, validateProviderEndpoint } from '@/lib/providers';
+import { checkProvider, ProviderCheckResult } from '@/lib/provider-check';
 
 interface SettingsModalProps {
   cryptoKey: CryptoKey;
@@ -23,6 +25,16 @@ interface SettingsModalProps {
 
 function createBackupFileName() {
   return `ocularocr-vault-backup-${Date.now()}.json`;
+}
+
+function TemperatureControl({ label, value, defaultValue, onChange }: { label: string; value: number; defaultValue: number; onChange: (value: number) => void }) {
+  return <div>
+    <div className="mb-1 flex items-center justify-between gap-3">
+      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</label>
+      <div className="flex items-center gap-2"><span className="font-mono text-xs font-bold text-indigo-600 dark:text-indigo-400">{value.toFixed(1)}</span><button type="button" onClick={() => onChange(defaultValue)} className="text-[9px] font-semibold text-slate-400 hover:text-indigo-600">Reset</button></div>
+    </div>
+    <input type="range" min="0" max="1" step="0.1" value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-1 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-indigo-600 focus:outline-none dark:bg-slate-800" />
+  </div>;
 }
 
 export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
@@ -71,6 +83,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     model: '',
     useLlmForOcr: false,
     temperature: 0.2,
+    ocrTemperature: 0.1,
+    summaryTemperature: 0.2,
+    correctionTemperature: 0.1,
     customOcrPrompt: '',
     customSummaryPrompt: '',
     autoTagStrategy: 'hybrid',
@@ -109,6 +124,8 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [showAdvancedAI, setShowAdvancedAI] = useState(false);
+  const [providerCheck, setProviderCheck] = useState<ProviderCheckResult | null>(null);
+  const [isCheckingProvider, setIsCheckingProvider] = useState(false);
   
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -246,6 +263,9 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
             ...prev,
             ...parsed,
             temperature: parsed.temperature ?? 0.2,
+            ocrTemperature: parsed.ocrTemperature ?? parsed.temperature ?? 0.1,
+            summaryTemperature: parsed.summaryTemperature ?? parsed.temperature ?? 0.2,
+            correctionTemperature: parsed.correctionTemperature ?? parsed.temperature ?? 0.1,
             autoTagStrategy: parsed.autoTagStrategy ?? 'hybrid',
             customOcrPrompt: parsed.customOcrPrompt ?? '',
             customSummaryPrompt: parsed.customSummaryPrompt ?? '',
@@ -269,7 +289,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
               parsed.configs.openai = parsed.configs.openai || parsed.configs.groq;
               delete parsed.configs.groq;
             }
-            setProviderConfigs(parsed.configs);
+            setProviderConfigs(prev => ({ ...prev, ...parsed.configs }));
           } else {
             setProviderConfigs(prev => ({
               ...prev,
@@ -280,6 +300,15 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
               }
             }));
           }
+          if (parsed.providerVerification) {
+            setProviderCheck({
+              connected: true,
+              modelFound: true,
+              models: [],
+              capabilities: parsed.providerVerification.capabilities,
+              checkedAt: parsed.providerVerification.checkedAt,
+            });
+          }
         } catch (err) {
           console.error("Failed to decrypt settings", err);
         }
@@ -289,6 +318,30 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     }
     load();
   }, [cryptoKey]);
+
+  const activeProvider = getProvider(settings.provider);
+  const activeProviderConfig = providerConfigs[settings.provider] || { apiKey: '', endpoint: '', model: '' };
+  const endpointError = validateProviderEndpoint({ provider: settings.provider, endpoint: activeProviderConfig.endpoint });
+
+  const invalidateProviderCheck = () => {
+    setProviderCheck(null);
+    setSettings(current => ({ ...current, providerVerification: undefined }));
+  };
+
+  const handleProviderCheck = async () => {
+    setIsCheckingProvider(true);
+    setProviderCheck(null);
+    const checkSettings: AISettings = {
+      ...settings,
+      ...activeProviderConfig,
+      model: resolveProviderModel({ provider: settings.provider, model: activeProviderConfig.model }),
+    };
+    try {
+      setProviderCheck(await checkProvider(checkSettings));
+    } finally {
+      setIsCheckingProvider(false);
+    }
+  };
 
   // Real-time theme preview effect
   useEffect(() => {
@@ -459,6 +512,13 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
         model: providerConfigs[settings.provider].model,
         endpoint: providerConfigs[settings.provider].endpoint,
         configs: providerConfigs,
+        providerVerification: providerCheck?.connected && providerCheck.modelFound ? {
+          provider: settings.provider,
+          endpoint: settings.provider === 'gemini' ? '' : resolveChatEndpoint({ provider: settings.provider, endpoint: activeProviderConfig.endpoint }),
+          model: resolveProviderModel({ provider: settings.provider, model: activeProviderConfig.model }),
+          checkedAt: providerCheck.checkedAt,
+          capabilities: providerCheck.capabilities,
+        } : settings.providerVerification,
       };
       const jsonStr = JSON.stringify(finalSettings);
       const { encrypted, iv } = await encryptString(jsonStr, cryptoKey);
@@ -622,21 +682,29 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                   >
                     <div>
                       <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('aiProviderLabel')}</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['gemini', 'openai', 'ollama'] as const).map((p) => (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {PROVIDERS.map((provider) => (
                           <button
-                            key={p}
+                            key={provider.id}
                             type="button"
-                            onClick={() => setSettings({ ...settings, provider: p })}
+                            onClick={() => {
+                              setSettings({ ...settings, provider: provider.id, providerVerification: undefined });
+                              setProviderCheck(null);
+                            }}
                             className={`rounded border py-2.5 text-xs font-bold capitalize transition-all cursor-pointer ${
-                              settings.provider === p 
+                              settings.provider === provider.id
                                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' 
                                 : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                           >
-                            {p === 'openai' ? 'OpenAI Compatible' : p === 'ollama' ? 'Ollama (Offline)' : 'Google Gemini'}
+                            <span className="block">{provider.name}</span>
+                            <span className="mt-0.5 block text-[9px] font-normal normal-case opacity-70">{provider.kind === 'local' ? 'On-device server' : provider.kind === 'cloud' ? 'Remote cloud' : 'Local or remote'}</span>
                           </button>
                         ))}
+                      </div>
+                      <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2.5 text-[10px] leading-relaxed text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                        <p className="font-semibold text-slate-800 dark:text-slate-200">{activeProvider.summary}</p>
+                        <p className="mt-1">Model guidance reviewed {activeProvider.reviewedAt}. <a href={activeProvider.modelsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-indigo-600 hover:underline dark:text-indigo-400">Official models <ExternalLink className="h-2.5 w-2.5" /></a></p>
                       </div>
                     </div>
 
@@ -681,25 +749,21 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           type="text"
                           required
                           value={providerConfigs[settings.provider]?.model || ''}
-                          onChange={(e) => setProviderConfigs({
-                            ...providerConfigs,
-                            [settings.provider]: { ...providerConfigs[settings.provider], model: e.target.value }
-                          })}
-                          placeholder={
-                            settings.provider === 'gemini' ? 'gemini-3.5-flash' : 
-                            settings.provider === 'openai' ? 'gpt-4o' : 'llama3'
-                          }
+                          onChange={(e) => {
+                            invalidateProviderCheck();
+                            setProviderConfigs({ ...providerConfigs, [settings.provider]: { ...providerConfigs[settings.provider], model: e.target.value } });
+                          }}
+                          list="provider-models"
+                          placeholder={activeProvider.modelExample}
                           className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                         />
-                        {settings.provider === 'gemini' && (
-                          <p className="mt-1.5 text-[10px] text-slate-500">{t('recommendedFlash')}</p>
-                        )}
-                        {settings.provider === 'openai' && (
-                          <div className="mt-1.5 text-[10px] text-slate-500 space-y-1">
-                            <p>• <span className="font-bold">OpenAI:</span> A vision model like <span className="font-bold text-slate-700 dark:text-slate-300">gpt-4o</span> is required for OCR.</p>
-                            <p>• <span className="font-bold">Groq:</span> We highly recommend <span className="font-bold text-slate-700 dark:text-slate-300">meta-llama/llama-4-scout-17b-16e-instruct</span> (vision-enabled and extremely fast).</p>
-                          </div>
-                        )}
+                        <datalist id="provider-models">
+                          {providerCheck?.models.map((model) => <option value={model} key={model} />)}
+                        </datalist>
+                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-slate-500">
+                          <span>{activeProvider.modelExampleLabel}; checked {activeProvider.reviewedAt}. Availability can vary by account.</span>
+                          <button type="button" onClick={() => { invalidateProviderCheck(); setProviderConfigs({ ...providerConfigs, [settings.provider]: { ...activeProviderConfig, model: activeProvider.modelExample } }); }} className="shrink-0 font-semibold text-indigo-600 hover:underline dark:text-indigo-400">Use example</button>
+                        </div>
                       </div>
 
                       {settings.provider !== 'ollama' && (
@@ -708,11 +772,11 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           <input
                             type="password"
                             value={providerConfigs[settings.provider]?.apiKey || ''}
-                            onChange={(e) => setProviderConfigs({
-                              ...providerConfigs,
-                              [settings.provider]: { ...providerConfigs[settings.provider], apiKey: e.target.value }
-                            })}
-                            placeholder={`Enter your ${settings.provider === 'openai' ? 'OpenAI or Groq' : 'Gemini'} API key`}
+                            onChange={(e) => {
+                              invalidateProviderCheck();
+                              setProviderConfigs({ ...providerConfigs, [settings.provider]: { ...providerConfigs[settings.provider], apiKey: e.target.value } });
+                            }}
+                            placeholder={`Enter your ${settings.provider === 'openai' ? 'provider' : 'Gemini'} API key`}
                             className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                           />
                         </div>
@@ -724,23 +788,44 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           <input
                             type="text"
                             value={providerConfigs[settings.provider]?.endpoint || ''}
-                            onChange={(e) => setProviderConfigs({
-                              ...providerConfigs,
-                              [settings.provider]: { ...providerConfigs[settings.provider], endpoint: e.target.value }
-                            })}
-                            placeholder={
-                              settings.provider === 'ollama' ? 'http://localhost:11434/v1/chat/completions' : 
-                              'https://api.openai.com/v1/chat/completions'
-                            }
+                            onChange={(e) => {
+                              invalidateProviderCheck();
+                              setProviderConfigs({ ...providerConfigs, [settings.provider]: { ...providerConfigs[settings.provider], endpoint: e.target.value } });
+                            }}
+                            placeholder={activeProvider.defaultEndpoint}
                             className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:text-white"
                           />
-                          {settings.provider === 'openai' && (
-                            <p className="mt-1 text-[9px] text-slate-400 dark:text-slate-500">
-                              Leave blank for default OpenAI. For Groq, set to: <code className="bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 px-1 rounded text-[9px]">https://api.groq.com/openai/v1/chat/completions</code>
-                            </p>
-                          )}
+                          <p className={`mt-1 text-[9px] ${endpointError ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                            {endpointError || (settings.provider === 'ollama' ? 'Local-only mode accepts localhost, 127.0.0.1, or ::1.' : 'Leave blank for OpenAI, or enter a complete OpenAI-compatible Chat Completions URL.')}
+                          </p>
                         </div>
                       )}
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950/50">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200"><Wifi className="h-3.5 w-3.5" /> Connection & capabilities</p>
+                            <p className="mt-1 text-[10px] leading-relaxed text-slate-500">Sends tiny synthetic checks—not vault content—to verify text, image input, and structured JSON. The provider may charge a very small amount.</p>
+                          </div>
+                          <button type="button" disabled={isCheckingProvider || !!endpointError} onClick={handleProviderCheck} className="inline-flex shrink-0 items-center gap-1.5 rounded bg-indigo-600 px-3 py-2 text-[10px] font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            <RefreshCw className={`h-3 w-3 ${isCheckingProvider ? 'animate-spin' : ''}`} /> {isCheckingProvider ? 'Checking…' : 'Test setup'}
+                          </button>
+                        </div>
+                        {providerCheck && (
+                          <div className="mt-3 space-y-2">
+                            <p className={`text-[10px] font-semibold ${providerCheck.connected && providerCheck.modelFound ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                              {providerCheck.connected ? (providerCheck.modelFound ? 'Connected; selected model is available.' : providerCheck.error) : providerCheck.error}
+                            </p>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {(['text', 'vision', 'structured'] as const).map((capability) => {
+                                const state = providerCheck.capabilities[capability];
+                                return <div key={capability} className={`rounded border px-2 py-1.5 text-center text-[9px] font-semibold capitalize ${state === 'verified' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400' : state === 'unsupported' ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400' : 'border-slate-200 text-slate-500 dark:border-slate-800'}`}>{capability}<span className="block font-normal">{state}</span></div>;
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {!providerCheck && <p className="mt-2 flex items-center gap-1 text-[9px] text-slate-400"><CircleHelp className="h-3 w-3" /> Untested models remain user-supplied until this check succeeds.</p>}
+                      </div>
 
                       <div className="flex items-center gap-3 py-1">
                         <input
@@ -773,27 +858,12 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                       )}
 
                       <div className="border-t border-slate-100 dark:border-slate-800 pt-3 mt-1 flex flex-col gap-3">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('modelTempLabel')}</label>
-                            <span className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                              {(settings.temperature ?? 0.2).toFixed(1)}
-                            </span>
-                          </div>
-                          <input
-                            type="range"
-                            min="0.0"
-                            max="1.0"
-                            step="0.1"
-                            value={settings.temperature ?? 0.2}
-                            onChange={(e) => setSettings({ ...settings, temperature: parseFloat(e.target.value) })}
-                            className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-600 focus:outline-none"
-                          />
-                          <div className="flex justify-between text-[8px] text-slate-400 dark:text-slate-500 mt-1">
-                            <span>{t('deterministic')}</span>
-                            <span>{t('creative')}</span>
-                          </div>
-</div>
+                        <div className="space-y-3 rounded border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950/40">
+                          <div><p className="text-[10px] font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">Task sampling</p><p className="text-[9px] text-slate-400">Lower values are safer for faithful extraction. Each task can be reset independently.</p></div>
+                          <TemperatureControl label="OCR extraction" value={settings.ocrTemperature ?? 0.1} defaultValue={0.1} onChange={(value) => setSettings({ ...settings, ocrTemperature: value })} />
+                          <TemperatureControl label="Summaries" value={settings.summaryTemperature ?? 0.2} defaultValue={0.2} onChange={(value) => setSettings({ ...settings, summaryTemperature: value })} />
+                          <TemperatureControl label="OCR correction" value={settings.correctionTemperature ?? 0.1} defaultValue={0.1} onChange={(value) => setSettings({ ...settings, correctionTemperature: value })} />
+                        </div>
 
                         {/* Post-OCR Correction */}
                         <div className="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-3">
@@ -813,7 +883,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
 
                           {(settings.enablePostOcrCorrection ?? false) && (
                             <div className="pl-3 border-l-2 border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-                              <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('postOcrCorrectionPromptLabel')}</label>
+                              <div className="flex items-center justify-between"><label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('postOcrCorrectionPromptLabel')}</label><button type="button" onClick={() => setSettings({ ...settings, postOcrCorrectionPrompt: '' })} className="text-[9px] font-semibold text-slate-400 hover:text-indigo-600">Reset</button></div>
                               <textarea
                                 value={settings.postOcrCorrectionPrompt || ''}
                                 onChange={(e) => setSettings({ ...settings, postOcrCorrectionPrompt: e.target.value })}
@@ -840,7 +910,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                           {showAdvancedAI && (
                             <div className="mt-3 flex flex-col gap-3 pl-1 border-l-2 border-indigo-100 dark:border-indigo-900/60">
                               <div>
-                                <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customOcrPromptLabel')}</label>
+                                <div className="mb-1 flex items-center justify-between"><label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customOcrPromptLabel')}</label><button type="button" onClick={() => setSettings({ ...settings, customOcrPrompt: '' })} className="text-[9px] font-semibold text-slate-400 hover:text-indigo-600">Reset</button></div>
                                 <textarea
                                   value={settings.customOcrPrompt || ''}
                                   onChange={(e) => setSettings({ ...settings, customOcrPrompt: e.target.value })}
@@ -854,7 +924,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
                               </div>
 
                               <div>
-                                <label className="mb-1 block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customSummaryPromptLabel')}</label>
+                                <div className="mb-1 flex items-center justify-between"><label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{t('customSummaryPromptLabel')}</label><button type="button" onClick={() => setSettings({ ...settings, customSummaryPrompt: '' })} className="text-[9px] font-semibold text-slate-400 hover:text-indigo-600">Reset</button></div>
                                 <textarea
                                   value={settings.customSummaryPrompt || ''}
                                   onChange={(e) => setSettings({ ...settings, customSummaryPrompt: e.target.value })}

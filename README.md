@@ -26,8 +26,9 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 
 *   **🔒 Local Encrypted Vault**: Documents, metadata, tags, settings, and AI summaries are encrypted client-side using **AES-GCM (256-bit)** keys. New vaults use PBKDF2-SHA-256 with 600,000 iterations; existing vaults retain their versioned derivation settings for compatibility.
 *   **🤖 Multi-Engine OCR & Vision**:
-    *   **Cloud AI OCR**: Seamlessly integrates with **Google Gemini API** (utilizing fast, low-latency models like `gemini-3.5-flash` via the `@google/genai` SDK) and **OpenAI API** (`gpt-4o`).
-    *   **Local AI OCR**: Configurable endpoint support for **Ollama** or custom local AI APIs (e.g., Groq) for fully self-hosted cloud extractions.
+    *   **Cloud AI OCR**: Connects to Google Gemini or an OpenAI-compatible cloud endpoint after explicit consent.
+    *   **Local AI OCR**: Connects directly from the browser to Ollama or another OpenAI-compatible endpoint running on the same device.
+    *   **Capability checks**: Discovers available models where supported and uses tiny synthetic requests to verify text generation, image input, and structured JSON before document OCR.
     *   **Offline Native OCR**: Bundles the Tesseract.js engine plus English and Indonesian models for OCR without a network connection. Additional language packs can be downloaded once and kept for offline use.
 *   **🏷️ Hybrid Auto-Tagging & Categorization**:
     *   **Local Heuristics**: Lightweight rule-based tag matching on filename and document contents (Invoices, Receipts, Contracts, Passports, Statements, Manuals, Medical docs, etc.).
@@ -47,7 +48,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 
 ## 🗺️ Roadmap
 
-**0.21.0 — Structured OCR and Rich Export** is implemented in the current development branch. The next milestone is **0.22.0 — Guide, Settings, and Provider Refresh**, which replaces stale model guidance with verified, capability-based configuration and rewrites the English and Indonesian documentation around the shipped app. See the [project roadmap](ROADMAP.md) for scope and completion criteria.
+**0.22.0 — Guide, Settings, and Provider Refresh** is implemented in the current development branch. It replaces duplicated model defaults with a dated provider registry, adds live capability checks, and keeps the English and Indonesian guides structurally aligned. See the [project roadmap](ROADMAP.md) for the path to 1.0.
 
 ---
 
@@ -61,7 +62,7 @@ graph TD
     B -->|Versioned KDF Parameters| C[CryptoKey AES-GCM 256]
     D[Upload PDF / Image] --> E{Select OCR Engine}
     E -->|Local Offline| F[Tesseract.js OCR]
-    E -->|Cloud/Local AI| G[Gemini / OpenAI / Ollama]
+    E -->|Direct browser request| G[Gemini / OpenAI-compatible / Ollama]
     F --> H[Document Text]
     G --> H
     H --> I[Encrypt text & summary with AES-GCM]
@@ -72,7 +73,7 @@ graph TD
 
 1.  **Key Derivation**: When unlocking your vault, your password is put through a PBKDF2 derivation function with a cryptographic salt unique to your browser storage.
 2.  **Encryption**: Documents, document metadata, tags, OCR results, settings, and summaries are encrypted with unique initialization vectors (IVs) and stored in `IndexedDB` via `idb-keyval`.
-3.  **AI privacy boundary**: Local Tesseract OCR stays on-device. Remote AI OCR, tagging, cleanup, or summaries require explicit cloud-processing consent and send only the content needed for that operation to the configured provider.
+3.  **AI privacy boundary**: Local Tesseract OCR stays on-device. Remote AI OCR, tagging, cleanup, or summaries require explicit cloud-processing consent and send only the content needed for that operation directly from the browser to the configured provider. API keys are encrypted at rest but decrypted in browser memory for those requests; there is no secret-hiding AI proxy.
 4.  **On-the-Fly Decryption**: When viewing a document, the ciphertext is decrypted temporarily in browser memory. Locking the vault discards the crypto keys instantly.
 
 ---
@@ -84,9 +85,30 @@ graph TD
 *   **Styling**: Tailwind CSS v4 (v4.3), Motion (Framer Motion)
 *   **Icons**: Lucide React
 *   **Database**: IndexedDB (using `idb-keyval` for lightweight promise-based storage)
-*   **AI Integrations**: `@google/genai` (Gemini SDK), OpenAI API Client, Ollama compatibility
+*   **AI Integrations**: `@google/genai` (Gemini SDK), OpenAI-compatible Chat Completions, Ollama compatibility
 *   **Client-Side PDF Rendering**: `pdfjs-dist` & `jspdf`
 *   **Client-Side OCR**: `tesseract.js`
+
+---
+
+## AI Provider Setup
+
+Provider settings are entered inside the encrypted vault under **Settings → AI Processing**. Model availability changes independently of OcularOCR, so the app treats these as dated examples and verifies the selected model against the connected account or server.
+
+| Provider | Dated model example | Endpoint behavior | Official source |
+| --- | --- | --- | --- |
+| Google Gemini | `gemini-3.5-flash` | Remote Gemini API; API key required | [Gemini models](https://ai.google.dev/gemini-api/docs/models) |
+| OpenAI-compatible | `gpt-5.6-luna` for OpenAI | Defaults to OpenAI; custom HTTPS-compatible endpoints are accepted | [OpenAI models](https://developers.openai.com/api/docs/models) |
+| Ollama | `gemma3` | Local `localhost:11434`; use an installed vision model | [Ollama vision](https://docs.ollama.com/capabilities/vision) |
+
+Examples and sources were reviewed on **2026-07-14**. Use **Test setup** to discover current models and verify text, vision, and structured-output support. If an example is unavailable to an account, select another returned model and test again.
+
+### Support and freshness policy
+
+- OcularOCR targets current releases of Chromium, Firefox, and Safari with IndexedDB, Web Crypto, Web Workers, and PDF.js support. Passkeys and persistent-storage protection remain browser-dependent.
+- Encrypted vault and settings migrations preserve existing data; export an encrypted backup before upgrading or moving browser profiles.
+- Provider model availability is not guaranteed. Curated examples carry a review date, the app discovers account-visible models, and a monthly automated check validates official documentation links.
+- Experimental or provider-dependent behavior is labeled in the UI and must pass the capability test before AI OCR is enabled.
 
 ---
 
@@ -107,21 +129,14 @@ cd OcularOCR
 npm install
 ```
 
-### 3. Configure environment variables
-Create a `.env.local` file in the root directory (you can copy [.env.example](file:///.env.example)):
-```bash
-# Set your Gemini API key for default AI OCR / Tagging / Summaries
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-### 4. Run the development server
+### 3. Run the development server
 ```bash
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 5. Build for Production
+### 4. Build for Production
 To build a highly optimized production bundle:
 ```bash
 npm run build
@@ -141,4 +156,4 @@ OcularOCR is configured to run as a Progressive Web App:
 
 ## 📄 License
 
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](file:///Users/handi/Github/OcularOCR/LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.

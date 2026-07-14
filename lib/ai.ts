@@ -2,6 +2,8 @@ import { AISettings, StructuredOcrResult } from './storage';
 import { normalizeStructuredOcrResult, STRUCTURED_OCR_VERSION, tablePlainText } from './structured-ocr';
 import { GoogleGenAI } from '@google/genai';
 import { assertAiRequestAllowed } from './ai-policy';
+import { resolveChatEndpoint, resolveProviderModel } from './providers';
+import { assertProviderReadyForOcr } from './provider-check';
 
 export class StructuredOcrUnsupportedError extends Error {
   constructor(message?: string) {
@@ -79,7 +81,7 @@ async function callLlm(prompt: string, settings: AISettings, temp: number = 0.2)
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
     const response = await ai.models.generateContent({
-      model: settings.model || 'gemini-3.5-flash',
+      model: resolveProviderModel(settings),
       contents: prompt,
       config: {
         temperature: temp
@@ -87,14 +89,7 @@ async function callLlm(prompt: string, settings: AISettings, temp: number = 0.2)
     });
     return response.text || 'No response generated.';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
-    const isOllama = settings.provider === 'ollama';
-    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    
-    let endpoint = settings.endpoint || defaultEndpoint;
-    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
-      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
-    }
-    const isGroq = endpoint.includes('groq.com');
+    const endpoint = resolveChatEndpoint(settings);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -104,7 +99,7 @@ async function callLlm(prompt: string, settings: AISettings, temp: number = 0.2)
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
+      model: resolveProviderModel(settings),
       messages: [{ role: 'user', content: prompt }],
       temperature: temp
     };
@@ -139,7 +134,7 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
     // Map phase: Summarize each chunk in parallel
     const mapPromises = chunks.map(async (chunk, idx) => {
       const chunkPrompt = `Below is part ${idx + 1} of ${chunks.length} from a larger document. Please provide a detailed bulleted summary of key points and facts in this section only:\n\n${chunk}`;
-      return callLlm(chunkPrompt, settings, 0.1);
+      return callLlm(chunkPrompt, settings, settings.summaryTemperature ?? settings.temperature ?? 0.1);
     });
     
     const chunkSummaries = await Promise.all(mapPromises);
@@ -156,7 +151,7 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
       finalPrompt = `Please synthesize the following intermediate section summaries into a single cohesive, highly professional global summary of the entire document. Maintain key names, dates, and crucial facts:\n\n${combinedSummaryText}`;
     }
     
-    return callLlm(finalPrompt, settings, 0.2);
+    return callLlm(finalPrompt, settings, settings.summaryTemperature ?? settings.temperature ?? 0.2);
   }
 
   let prompt = '';
@@ -182,12 +177,13 @@ export async function summarizeText(text: string, settings: AISettings, tags?: s
     }
   }
 
-  const temp = settings.temperature !== undefined ? settings.temperature : 0.2;
+  const temp = settings.summaryTemperature ?? settings.temperature ?? 0.2;
   return callLlm(prompt, settings, temp);
 }
 
 export async function extractTextFromImages(imagesBase64: string[], settings: AISettings): Promise<string> {
   assertAiRequestAllowed(settings);
+  assertProviderReadyForOcr(settings);
   let defaultPrompt = "Please extract all the text exactly as it appears in these document images. For each page/image, please prepend a line matching exactly '--- PAGE X ---' where X is the page number (starting from 1), followed by the text of that page. Do not include any other introductory or conversational remarks.";
   
   if (settings.handwritingMode) {
@@ -198,7 +194,7 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     ? settings.customOcrPrompt
     : defaultPrompt;
 
-  const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
+  const temp = settings.ocrTemperature ?? settings.temperature ?? 0.1;
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -209,7 +205,7 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
       contents.push({ inlineData: { mimeType, data } });
     }
     const response = await ai.models.generateContent({
-      model: settings.model || 'gemini-3.5-flash',
+      model: resolveProviderModel(settings),
       contents,
       config: {
         temperature: temp
@@ -217,14 +213,7 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     });
     return response.text || '';
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
-    const isOllama = settings.provider === 'ollama';
-    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-
-    let endpoint = settings.endpoint || defaultEndpoint;
-    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
-      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
-    }
-    const isGroq = endpoint.includes('groq.com');
+    const endpoint = resolveChatEndpoint(settings);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -239,7 +228,7 @@ export async function extractTextFromImages(imagesBase64: string[], settings: AI
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
+      model: resolveProviderModel(settings),
       messages: [{ role: 'user', content: contentArray }],
       temperature: temp
     };
@@ -289,6 +278,7 @@ export async function extractStructuredFromImages(
   pageDimensions: { width: number; height: number }[]
 ): Promise<StructuredOcrResult> {
   assertAiRequestAllowed(settings);
+  assertProviderReadyForOcr(settings, true);
   const structuredPrompt = `Extract text from these document images and return it as structured JSON.
 For each page, identify text blocks and provide for each block:
 - "text": the exact text content
@@ -301,7 +291,7 @@ Preserve list markers, heading hierarchy, table headers, empty cells, and merged
 Do not include any text outside the JSON structure.
 Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
 
-  const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
+  const temp = settings.ocrTemperature ?? settings.temperature ?? 0.1;
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -312,7 +302,7 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
       contents.push({ inlineData: { mimeType, data } });
     }
     const response = await ai.models.generateContent({
-      model: settings.model || 'gemini-3.5-flash',
+      model: resolveProviderModel(settings),
       contents,
       config: {
         temperature: temp,
@@ -324,11 +314,7 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
     return structuredResponseToOcrResult(parsed, pageDimensions, imagesBase64);
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
     const isOllama = settings.provider === 'ollama';
-    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    let endpoint = settings.endpoint || defaultEndpoint;
-    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
-      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
-    }
+    const endpoint = resolveChatEndpoint(settings);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -343,7 +329,7 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
     }
 
     const body: any = {
-      model: settings.model || (isOllama ? 'llama3.2-vision' : 'gpt-4o'),
+      model: resolveProviderModel(settings),
       messages: [{ role: 'user', content: contentArray }],
       temperature: temp
     };
@@ -540,7 +526,7 @@ export async function correctOcrText(
     ? settings.postOcrCorrectionPrompt.replace('{{text}}', text)
     : `Fix any OCR errors in the following text. Preserve line breaks, paragraphs, and reading order. Output only the corrected text without any introductory remarks or explanations:\n\n${text}`;
 
-  const temp = settings.temperature !== undefined ? settings.temperature : 0.1;
+  const temp = settings.correctionTemperature ?? settings.temperature ?? 0.1;
 
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -551,19 +537,13 @@ export async function correctOcrText(
       contents.unshift({ inlineData: { mimeType, data } });
     }
     const response = await ai.models.generateContent({
-      model: settings.model || 'gemini-3.5-flash',
+      model: resolveProviderModel(settings),
       contents,
       config: { temperature: temp }
     });
     return response.text || text;
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
-    const isOllama = settings.provider === 'ollama';
-    let defaultEndpoint = isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    let endpoint = settings.endpoint || defaultEndpoint;
-    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
-      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
-    }
-    const isGroq = endpoint.includes('groq.com');
+    const endpoint = resolveChatEndpoint(settings);
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -578,7 +558,7 @@ export async function correctOcrText(
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : isGroq ? 'meta-llama/llama-4-scout-17b-16e-instruct' : 'gpt-4o'),
+      model: resolveProviderModel(settings),
       messages: [{ role: 'user', content: contentArray }],
       temperature: temp
     };

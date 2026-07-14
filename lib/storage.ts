@@ -40,6 +40,9 @@ export interface AISettings {
   model: string;
   useLlmForOcr?: boolean;
   temperature?: number;
+  ocrTemperature?: number;
+  summaryTemperature?: number;
+  correctionTemperature?: number;
   customOcrPrompt?: string;
   customSummaryPrompt?: string;
   autoTagStrategy?: 'hybrid' | 'local' | 'none';
@@ -62,6 +65,13 @@ export interface AISettings {
   structuredLlmOcr?: boolean;
   localOnlyMode?: boolean;
   cloudProcessingConsent?: boolean;
+  providerVerification?: {
+    provider: 'gemini' | 'openai' | 'ollama';
+    endpoint: string;
+    model: string;
+    checkedAt: string;
+    capabilities: { text: 'verified' | 'unsupported' | 'untested'; vision: 'verified' | 'unsupported' | 'untested'; structured: 'verified' | 'unsupported' | 'untested' };
+  };
 }
 
 export interface OcrWord {

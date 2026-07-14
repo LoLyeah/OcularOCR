@@ -1,6 +1,7 @@
 import { AISettings } from './storage';
 import { GoogleGenAI, Type } from '@google/genai';
 import { assertAiRequestAllowed } from './ai-policy';
+import { resolveChatEndpoint, resolveProviderModel } from './providers';
 
 // Document categories list for suggestion
 export const STANDARD_CATEGORIES = [
@@ -104,7 +105,7 @@ ${text.substring(0, 3000)}`;
   if (settings.provider === 'gemini') {
     const ai = new GoogleGenAI({ apiKey: settings.apiKey });
     const response = await ai.models.generateContent({
-      model: settings.model || 'gemini-3.5-flash',
+      model: resolveProviderModel(settings),
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
@@ -123,11 +124,7 @@ ${text.substring(0, 3000)}`;
     }
     return [];
   } else if (settings.provider === 'openai' || settings.provider === 'ollama') {
-    const isOllama = settings.provider === 'ollama';
-    let endpoint = settings.endpoint || (isOllama ? 'http://localhost:11434/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions');
-    if (endpoint && !endpoint.includes('/chat/completions') && !endpoint.includes('/completions')) {
-      endpoint = endpoint.endsWith('/') ? `${endpoint}chat/completions` : `${endpoint}/chat/completions`;
-    }
+    const endpoint = resolveChatEndpoint(settings);
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -136,7 +133,7 @@ ${text.substring(0, 3000)}`;
     }
 
     const body = {
-      model: settings.model || (isOllama ? 'llama3' : 'gpt-4o'),
+      model: resolveProviderModel(settings),
       messages: [{ role: 'user', content: prompt }],
       response_format: { type: "json_object" }
     };

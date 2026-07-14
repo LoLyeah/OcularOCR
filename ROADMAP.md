@@ -66,6 +66,8 @@ text.
 
 ## 0.22.0 — Guide, Settings, and Provider Refresh
 
+**Status: Implemented.**
+
 Replace hard-coded and conflicting provider guidance with one verified source of
 truth, then rebuild Settings, the in-app English and Indonesian guides, and the
 README around the app's actual behavior. Model catalogs change independently of

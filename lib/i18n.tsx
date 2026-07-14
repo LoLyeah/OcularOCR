@@ -129,7 +129,6 @@ export const translationDict: Translations = {
     id: 'Gambar dokumen atau teks hasil ekstraksi dapat dikirim ke provider jarak jauh yang dipilih. Kata sandi dan kunci enkripsi vault tidak pernah dikirim.'
   },
   modelNameLabel: { en: 'Model Name', id: 'Model Name' },
-  recommendedFlash: { en: 'Recommended: gemini-3.5-flash', id: 'Direkomendasikan: gemini-3.5-flash' },
   apiKeyLabel: { en: 'API Key', id: 'API Key' },
   apiEndpointLabel: { en: 'API Endpoint URL', id: 'API Endpoint URL' },
   useLlmOcrLabel: { en: 'Use LLM Vision for OCR Data Extraction', id: 'Gunakan LLM Vision untuk Ekstraksi Data OCR' },

@@ -2,7 +2,7 @@
 
 ## 0.21.0 — Structured OCR and Rich Export
 
-**Status:** Implemented; pending the 0.21.0 release commit and version bump.
+**Status:** Released in 0.21.0.
 
 Turn OCR output into an editable document structure that is shared by online AI
 providers, local AI endpoints, and offline Tesseract. Use that structure to

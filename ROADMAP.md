@@ -141,7 +141,7 @@ or claim capabilities that have not been checked.
 
 ## 1.0.0 — Stable Release
 
-**Status: Implemented; awaiting the explicit 1.0.0 release bump.**
+**Status: Released.**
 
 ### Launch hardening
 

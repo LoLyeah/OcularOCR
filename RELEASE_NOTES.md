@@ -1,4 +1,4 @@
-# OcularOCR 1.0.0 Release Candidate
+# OcularOCR 1.0.0
 
 OcularOCR 1.0 brings the local document workflow—from import through OCR,
 correction, tables, and export—to a stable release baseline. The application
@@ -56,4 +56,4 @@ the optional no-password mode is explicitly limited to non-sensitive use.
 - OcularOCR cannot recover vault passwords. Export a fresh encrypted backup
   before upgrading or moving browser profiles.
 
-The release version remains 0.22.0 until the final 1.0.0 version bump is made.
+Released as version 1.0.0.

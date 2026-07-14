@@ -23,6 +23,8 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+const MAX_BACKUP_IMPORT_BYTES = 150 * 1024 * 1024;
+
 function createBackupFileName() {
   return `ocularocr-vault-backup-${Date.now()}.json`;
 }
@@ -468,6 +470,7 @@ export function SettingsModal({ cryptoKey, onClose }: SettingsModalProps) {
     if (!file) return;
     setIsImporting(true);
     try {
+      if (file.size > MAX_BACKUP_IMPORT_BYTES) throw new Error('The backup exceeds the 150 MB import limit.');
       const text = await file.text();
       const parsed = JSON.parse(text);
       if (!parsed.salt || !parsed.documents) {

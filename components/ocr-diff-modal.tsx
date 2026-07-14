@@ -90,7 +90,7 @@ export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose,
         initial={{ opacity: 0, scale: 0.95, y: 15 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 15 }}
-        className="flex flex-col w-full max-w-4xl h-[80vh] bg-white dark:bg-slate-900 rounded-lg shadow-xl overflow-hidden"
+        className="flex h-[80dvh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl dark:bg-slate-900"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <h2 id="ocr-compare-title" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">

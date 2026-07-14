@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import './globals.css'; // Global styles
 import { PwaHandler } from '@/components/pwa-handler';
 import { LanguageProvider } from '@/lib/i18n';
@@ -8,6 +8,13 @@ export const metadata: Metadata = {
   description: 'Secure, client-side encrypted document storage and OCR processing system.',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#4f46e5',
+};
+
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -15,7 +22,6 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icon.svg" />
-        <meta name="theme-color" content="#4f46e5" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <script
@@ -33,7 +39,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
           }}
         />
       </head>
-      <body suppressHydrationWarning className="bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans h-screen flex flex-col">
+      <body suppressHydrationWarning className="bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans h-dvh flex flex-col overscroll-none">
         <LanguageProvider>
           {children}
           <PwaHandler />

@@ -25,7 +25,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
 
   return (
     <ToastProvider>
-      <div className="flex flex-col h-screen w-full bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+      <div className="flex h-dvh w-full flex-col bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
         <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded bg-indigo-600 px-3 py-2 text-xs font-bold text-white focus:not-sr-only">
           {t('skipToContent')}
         </a>

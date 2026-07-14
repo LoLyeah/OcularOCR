@@ -144,7 +144,8 @@ export function PwaHandler() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
+          style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+          className="fixed right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
         >
           <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
             <Smartphone className="h-5 w-5" />
@@ -174,6 +175,7 @@ export function PwaHandler() {
           </div>
           <button
             onClick={handleDismiss}
+            aria-label={t('dismissBtn')}
             className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />
@@ -188,7 +190,8 @@ export function PwaHandler() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.95 }}
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
+          style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+          className="fixed right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-white dark:bg-slate-900 p-4 shadow-2xl flex gap-3.5"
         >
           <div className="p-2 h-10 w-10 shrink-0 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
             <RefreshCw className="h-5 w-5 animate-spin" style={{ animationDuration: '3s' }} />
@@ -218,6 +221,7 @@ export function PwaHandler() {
           </div>
           <button
             onClick={() => setDismissedUpdate(true)}
+            aria-label={t('dismissBtn')}
             className="absolute top-2 right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
           >
             <X className="h-3.5 w-3.5" />

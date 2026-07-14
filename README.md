@@ -48,7 +48,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 
 ## 🗺️ Roadmap
 
-**0.22.0 — Guide, Settings, and Provider Refresh** is implemented in the current development branch. It replaces duplicated model defaults with a dated provider registry, adds live capability checks, and keeps the English and Indonesian guides structurally aligned. See the [project roadmap](ROADMAP.md) for the path to 1.0.
+The **1.0 Stable Release milestone** is implemented in the current development branch and awaits the explicit version bump. It adds launch security headers, encrypted-vault confirmation, browser preflight, mobile/PWA hardening, adaptive OCR resource limits, and final release documentation. See the [project roadmap](ROADMAP.md), [release candidate notes](RELEASE_NOTES.md), and [release checklist](docs/RELEASE_CHECKLIST.md).
 
 ---
 

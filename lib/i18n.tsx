@@ -40,22 +40,6 @@ export const translationDict: Translations = {
     id: 'Apakah Anda yakin? Tindakan ini akan menghapus semua dokumen terenkripsi, pengaturan, dan kunci enkripsi Anda secara permanen. Tindakan ini tidak dapat dibatalkan.' 
   },
   yesWipeAllData: { en: 'YES, WIPE ALL DATA', id: 'YA, HAPUS SEMUA DATA' },
-  welcomeToOcular: { en: 'Welcome to OcularOCR', id: 'Selamat Datang di OcularOCR' },
-  chooseSecureVault: { 
-    en: 'Choose how you want to secure your local document vault. This determines how your data will be encrypted on this device.', 
-    id: 'Pilih bagaimana Anda ingin mengamankan vault dokumen lokal Anda. Ini menentukan bagaimana data Anda akan dienkripsi pada perangkat ini.' 
-  },
-  encryptedVaultRecommended: { en: 'Encrypted Vault (Recommended)', id: 'Encrypted Vault (Direkomendasikan)' },
-  secureAllDocsPass: { 
-    en: 'Secure all documents and AI settings with a password. Requires password on every visit.', 
-    id: 'Amankan semua dokumen dan pengaturan AI dengan kata sandi. Memerlukan kata sandi pada setiap kunjungan.' 
-  },
-  openVault: { en: 'Open Vault', id: 'Open Vault' },
-  dataStoredLocallyNoPass: { 
-    en: 'Data is still stored locally, but automatically unlocked without a password.', 
-    id: 'Data tetap disimpan secara lokal, tetapi dibuka secara otomatis tanpa kata sandi.' 
-  },
-  failedSetupUnencrypted: { en: 'Failed to setup unencrypted vault.', id: 'Gagal menyiapkan vault tanpa enkripsi.' },
   biometricUnlock: { en: 'Biometric Unlock', id: 'Biometric Unlock' },
   vaultSecuredPasskey: { 
     en: 'Your vault is secured with a Passkey. Click below or scan to unlock.', 
@@ -70,6 +54,12 @@ export const translationDict: Translations = {
     id: 'Masukkan kata sandi vault Anda untuk mendekripsi semua data Anda secara lokal.' 
   },
   vaultPasswordPlaceholder: { en: 'Vault Password', id: 'Kata Sandi Vault' },
+  confirmVaultPassword: { en: 'Confirm Vault Password', id: 'Konfirmasi Kata Sandi Vault' },
+  passwordMismatch: { en: 'The passwords do not match.', id: 'Kata sandi tidak cocok.' },
+  createSecureVault: { en: 'Create Secure Local Vault', id: 'Buat Vault Lokal Aman' },
+  createSecureVaultHelp: { en: 'Choose a unique password to encrypt this vault on your device.', id: 'Pilih kata sandi unik untuk mengenkripsi vault ini di perangkat Anda.' },
+  vaultPasswordRecoveryWarning: { en: 'OcularOCR cannot recover this password. Store it safely and export an encrypted backup after setup.', id: 'OcularOCR tidak dapat memulihkan kata sandi ini. Simpan dengan aman dan ekspor cadangan terenkripsi setelah penyiapan.' },
+  createVaultBtn: { en: 'CREATE ENCRYPTED VAULT', id: 'BUAT VAULT TERENKRIPSI' },
   passwordLengthError: { en: 'New vault passwords must be at least 12 characters.', id: 'Kata sandi vault baru harus minimal 12 karakter.' },
   unlocking: { en: 'Unlocking...', id: 'Membuka Kunci...' },
   unlockVaultBtn: { en: 'UNLOCK VAULT', id: 'BUKA KUNCI VAULT' },

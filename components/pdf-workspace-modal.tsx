@@ -182,7 +182,7 @@ export function PdfWorkspaceModal({ documents, cryptoKey, onClose, onSaved }: Pd
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-5">
-      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="pdf-workspace-title" tabIndex={-1} className="flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="pdf-workspace-title" tabIndex={-1} className="flex h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
         <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
           <div>
             <h2 id="pdf-workspace-title" className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">

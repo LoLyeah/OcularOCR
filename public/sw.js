@@ -1,5 +1,5 @@
 const APP_CACHE_PREFIX = 'ocular-app-cache-';
-const APP_CACHE_NAME = `${APP_CACHE_PREFIX}v3`;
+const APP_CACHE_NAME = `${APP_CACHE_PREFIX}v4`;
 const LANGUAGE_CACHE_NAME = 'ocular-language-cache-v1';
 const CORE_ASSETS = [
   '/',

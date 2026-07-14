@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { isNewerVersion } from '@/lib/version';
 
 const VERSION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
@@ -31,10 +32,11 @@ export function useVersionCheck() {
         if (data && data.version) {
           setLatestVersion(data.version);
           // Compare versions. In dev mode they might be equal.
-          if (data.version !== currentVersion) {
+          if (isNewerVersion(data.version, currentVersion)) {
             setUpdateAvailable(true);
             return { available: true, version: data.version };
           }
+          setUpdateAvailable(false);
         }
       }
     } catch (err) {
@@ -96,12 +98,12 @@ export function useVersionCheck() {
       }
     };
 
-    window.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', checkForUpdate);
 
     return () => {
       clearInterval(timer);
-      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', checkForUpdate);
     };
   }, [checkForUpdate]);

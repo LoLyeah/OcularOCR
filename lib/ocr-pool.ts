@@ -1,4 +1,5 @@
 import { createWorker, Worker } from 'tesseract.js';
+import { recommendedOcrWorkers } from './performance';
 
 interface PoolWorker {
   worker: Worker;
@@ -10,14 +11,21 @@ interface PoolWorker {
 class TesseractWorkerPool {
   private pool: PoolWorker[] = [];
   private maxWorkers = 4;
+  private idleTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
       const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
-      const memoryCap = deviceMemory !== undefined && deviceMemory <= 4 ? 2 : 4;
-      // Leave one logical core available for rendering and interaction.
-      this.maxWorkers = Math.min(memoryCap, Math.max(1, navigator.hardwareConcurrency - 1));
+      const mobile = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData?.mobile
+        ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      this.maxWorkers = recommendedOcrWorkers(navigator.hardwareConcurrency, deviceMemory, mobile);
     }
+  }
+
+  private scheduleIdleShutdown() {
+    if (this.pool.some((worker) => worker.busy)) return;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => { void this.terminateAll(); }, 60_000);
   }
 
   /**
@@ -25,6 +33,7 @@ class TesseractWorkerPool {
    * If the requested path type (bundled vs CDN) or languages differ, it adjusts.
    */
   private async getWorker(languages: string, allAreBundled: boolean): Promise<PoolWorker> {
+    clearTimeout(this.idleTimer);
     // 1. Look for an idle worker that matches the path configuration
     let poolWorker = this.pool.find(pw => !pw.busy && pw.isBundledPath === allAreBundled);
     
@@ -163,6 +172,7 @@ class TesseractWorkerPool {
         throw err;
       } finally {
         pw.busy = false;
+        this.scheduleIdleShutdown();
       }
     };
 
@@ -188,6 +198,7 @@ class TesseractWorkerPool {
       return confidences;
     } finally {
       pw.busy = false;
+      this.scheduleIdleShutdown();
     }
   }
 
@@ -195,6 +206,7 @@ class TesseractWorkerPool {
    * Terminate all workers in the pool.
    */
   public async terminateAll(): Promise<void> {
+    clearTimeout(this.idleTimer);
     const workersToTerminate = [...this.pool];
     this.pool = []; // immediately clear pool to avoid race conditions
     

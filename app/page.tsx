@@ -6,6 +6,7 @@ import { Dashboard } from '@/components/dashboard';
 import { getSalt } from '@/lib/storage';
 import { AnimatePresence } from 'motion/react';
 import { useI18n } from '@/lib/i18n';
+import { getPlatformReadiness } from '@/lib/platform';
 
 export default function Home() {
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null);
@@ -15,6 +16,14 @@ export default function Home() {
   const { t } = useI18n();
 
   useEffect(() => {
+    const readiness = getPlatformReadiness();
+    if (!readiness.supported) {
+      Promise.resolve().then(() => {
+        setInitError(`This browser is missing required features: ${readiness.missing.join(', ')}.`);
+        setIsInitializing(false);
+      });
+      return;
+    }
     getSalt()
       .then(() => setIsInitializing(false))
       .catch((err) => {
@@ -65,7 +74,7 @@ export default function Home() {
 
   if (isInitializing) {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+      <div className="flex h-dvh items-center justify-center bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
         <div className="animate-pulse text-xs font-bold tracking-widest uppercase text-slate-500 dark:text-slate-400">{t('initializingVault')}</div>
       </div>
     );
@@ -73,7 +82,7 @@ export default function Home() {
 
   if (initError) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans p-6 text-center">
+      <div className="flex h-dvh flex-col items-center justify-center bg-[#F1F5F9] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans p-6 text-center">
         <h1 className="text-lg font-bold mb-2">{t('vaultInitFailed')}</h1>
         <p className="max-w-md text-sm text-slate-600 dark:text-slate-400">{t('vaultInitFailedHelp')}</p>
         <button

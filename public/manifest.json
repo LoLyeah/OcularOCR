@@ -2,11 +2,17 @@
   "name": "OcularOCR",
   "short_name": "OcularOCR",
   "description": "Secure, client-side encrypted document storage and OCR processing system",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#4f46e5",
+  "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon.svg",

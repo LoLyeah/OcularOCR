@@ -141,6 +141,34 @@ or claim capabilities that have not been checked.
 
 ## 1.0.0 — Stable Release
 
-After 0.22.0, focus on security, migration, browser, mobile PWA, offline, and
-performance verification. Version 1.0.0 is ready when no launch-blocking issues
-remain and the user guide and release notes cover the complete workflow.
+**Status: Implemented; awaiting the explicit 1.0.0 release bump.**
+
+### Launch hardening
+
+- Require password confirmation for every new encrypted vault and retire the
+  weaker passphrase-free option while preserving access to existing vaults.
+- Add production browser security headers, platform capability preflight, safe
+  backup-size handling, and semantic update-version comparison.
+- Verify encrypted settings, backup versions, legacy OCR records, and existing
+  vaults remain compatible.
+
+### Browser, PWA, offline, and performance
+
+- Use dynamic mobile viewport sizing and safe-area-aware notifications.
+- Finalize manifest identity, scope, orientation, service-worker cache migration,
+  update behavior, and offline asset coverage.
+- Scale OCR concurrency for mobile and low-memory devices and release idle
+  workers after processing.
+- Cover security, migration, browser support, PWA metadata, offline behavior,
+  performance limits, and release documentation in automated tests.
+
+### Release documentation
+
+- Publish release notes covering setup, import, OCR choices, correction, tables,
+  exports, backup, privacy, compatibility, and upgrade behavior.
+- Maintain an auditable release checklist for automated, browser, data recovery,
+  and final manual release operations.
+
+Version 1.0.0 is ready when the automated release gates pass and the final two
+credential- and profile-dependent manual smoke tests are completed by the
+release owner.

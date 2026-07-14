@@ -154,6 +154,8 @@ OcularOCR is configured to run as a Progressive Web App:
 2. Click the **Install** button on the bottom prompt or the install icon in the browser address bar.
 3. Once installed, OcularOCR will run in its own dedicated, distraction-free app window, caching essential code to work 100% offline.
 
+Try it now: [OcularOCR](https://ocular-ocr.vercel.app/)
+
 ---
 
 ## 📄 License

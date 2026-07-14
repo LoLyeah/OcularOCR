@@ -53,20 +53,22 @@ function groupWordsIntoLines(words: OcrWord[]): GroupedLine[] {
 
 interface ExportSearchablePDFOptions {
   fileName: string;
-  pageCanvases: HTMLCanvasElement[];
+  pageCount: number;
+  getPageCanvas: (pageNumber: number) => Promise<HTMLCanvasElement>;
   structuredOcr: StructuredOcrResult;
 }
 
 export async function exportSearchablePDF({
   fileName,
-  pageCanvases,
+  pageCount,
+  getPageCanvas,
   structuredOcr
 }: ExportSearchablePDFOptions): Promise<void> {
-  if (pageCanvases.length === 0) {
+  if (pageCount < 1) {
     throw new Error('No pages available to export.');
   }
 
-  const firstCanvas = pageCanvases[0];
+  let firstCanvas: HTMLCanvasElement | null = await getPageCanvas(1);
   const pdf = new jsPDF({
     orientation: firstCanvas.width > firstCanvas.height ? 'l' : 'p',
     unit: 'pt',
@@ -74,8 +76,9 @@ export async function exportSearchablePDF({
     compress: true
   });
 
-  for (let i = 0; i < pageCanvases.length; i++) {
-    const canvas = pageCanvases[i];
+  for (let i = 0; i < pageCount; i++) {
+    const canvas = i === 0 ? firstCanvas : await getPageCanvas(i + 1);
+    if (!canvas) throw new Error(`Unable to render page ${i + 1}.`);
     const width = canvas.width;
     const height = canvas.height;
 
@@ -105,6 +108,9 @@ export async function exportSearchablePDF({
         });
       }
     }
+    canvas.width = 0;
+    canvas.height = 0;
+    if (i === 0) firstCanvas = null;
   }
 
   pdf.save(fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`);
@@ -113,7 +119,6 @@ export async function exportSearchablePDF({
 interface ExportReflowedPDFOptions {
   fileName: string;
   structuredOcr: StructuredOcrResult;
-  pageDimensions: { width: number; height: number }[];
 }
 
 export function buildReflowedPdf(structuredOcr: StructuredOcrResult): jsPDF {

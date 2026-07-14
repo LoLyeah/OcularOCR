@@ -10,8 +10,8 @@ the optional no-password mode is explicitly limited to non-sensitive use.
 
 1. Choose a recommended encrypted vault with a confirmed password of at least
    12 characters, or explicitly choose the warned no-password local mode.
-2. Import PDF, PNG, JPEG, or WebP files up to 25 MB each, including supported
-   public URLs.
+2. Import PDF, PNG, JPEG, or WebP files from the device using storage-aware
+   admission and large-file warnings. Public URL imports retain a 25 MB limit.
 3. Use offline Tesseract OCR or a capability-tested Gemini,
    OpenAI-compatible, or local Ollama model.
 4. Review headings, paragraphs, lists, reading order, and detected tables.

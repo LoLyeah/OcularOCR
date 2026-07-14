@@ -4,7 +4,6 @@ import { ArrowLeft, ScanText, Brain, FileText, Loader2, Sparkles, Send, Download
 import { DocumentEntry, getSettings, saveDocument, AISettings, StructuredOcrResult } from '@/lib/storage';
 import { decryptBuffer, decryptString, encryptString } from '@/lib/crypto';
 import { performOCR, performPdfOCR } from '@/lib/ocr';
-import { renderPdfToCanvas, renderPdfPageToCanvas, getPdfPageCount } from '@/lib/pdf';
 import { summarizeText, extractTextFromImages, correctOcrText, extractStructuredFromImages, StructuredOcrUnsupportedError, VisionModelUnsupportedError } from '@/lib/ai';
 import { suggestTags } from '@/lib/tagger';
 import ReactMarkdown from 'react-markdown';
@@ -337,23 +336,36 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
     return () => { cancelled = true; clearTimeout(timer); };
   }, [ocrStage, localPrepOpts, configureCanvas]);
 
-  const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => {
+  const getSinglePageCanvas = async (pageNumber: number = 1): Promise<HTMLCanvasElement> => {
     if (doc.type.includes('pdf')) {
-      const decryptedBuffer = await decryptBuffer(doc.encryptedData, doc.iv, cryptoKey);
-      return await renderPdfToCanvas(decryptedBuffer, pdfRenderScale);
-    } else {
-      if (!fileUrl) return [];
-      const img = new Image();
-      img.src = fileUrl;
-      await new Promise((resolve) => { img.onload = resolve; });
+      if (!pdfDocument) throw new Error('PDF is not ready.');
+      const page = await pdfDocument.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: pdfRenderScale });
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(img, 0, 0);
-      return [canvas];
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Could not get 2D context.');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: context, viewport } as any).promise;
+      page.cleanup();
+      return canvas;
     }
+    if (!fileUrl) throw new Error('No page image is available.');
+    const img = new Image();
+    img.src = fileUrl;
+    await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not get 2D context.');
+    context.drawImage(img, 0, 0);
+    return canvas;
   };
+
+  const getPageCanvases = async (): Promise<HTMLCanvasElement[]> => [
+    await getSinglePageCanvas(doc.type.includes('pdf') ? selectedOcrPage : 1),
+  ];
 
   const callOcrWithRetry = async <T,>(
     apiCall: () => Promise<T>,
@@ -1007,10 +1019,10 @@ settings = JSON.parse(decryptedStr);
           variant: "info"
         });
 
-        const canvases = await getPageCanvases();
         await exportSearchablePDF({
           fileName: `${doc.name}-searchable.pdf`,
-          pageCanvases: canvases,
+          pageCount: doc.type.includes('pdf') ? pdfTotalPages : 1,
+          getPageCanvas: getSinglePageCanvas,
           structuredOcr
         });
       } else {
@@ -1023,13 +1035,9 @@ settings = JSON.parse(decryptedStr);
           variant: "info"
         });
 
-        const canvases = await getPageCanvases();
-        const pageDimensions = canvases.map(c => ({ width: c.width, height: c.height }));
-
         await exportReflowedPDF({
           fileName: `${doc.name}-reflowed.pdf`,
-          structuredOcr: structuredOcr || { text: ocrText, pages: parseOcrPages(ocrText).map(p => ({ pageNumber: p.pageNumber, text: p.text, words: [] })) },
-          pageDimensions
+          structuredOcr: structuredOcr || { text: ocrText, pages: parseOcrPages(ocrText).map(p => ({ pageNumber: p.pageNumber, text: p.text, words: [] })) }
         });
       }
 
@@ -1080,9 +1088,7 @@ settings = JSON.parse(decryptedStr);
         const decryptedStr = await decryptString(encryptedSettings.data, encryptedSettings.iv, cryptoKey);
         settings = JSON.parse(decryptedStr);
       }
-      const canvases = await getPageCanvases();
-      if (canvases.length === 0) return;
-      const src = canvases[0];
+      const src = await getSinglePageCanvas(doc.type.includes('pdf') ? pdfCurrentPage + 1 : 1);
       const displayW = previewContainerRef.current?.clientWidth || src.width;
       const scaleX = src.width / displayW;
       const scaleY = src.height / (previewContainerRef.current?.clientHeight || src.height);
@@ -1201,14 +1207,13 @@ settings = JSON.parse(decryptedStr);
   };
 
   const handleDiffModalPick = (text: string, isTesseract: boolean) => {
-    setOcrText(text);
     if (structuredOcr) {
-      const pages = parseOcrPages(text);
-      const updatedPages = structuredOcr.pages.map(p => {
-        const found = pages.find(fp => fp.pageNumber === p.pageNumber);
-        return found ? { ...p, text: found.text } : p;
-      });
-      setStructuredOcr({ text, pages: updatedPages });
+      const updatedPages = structuredOcr.pages.map((page) => page.pageNumber === selectedOcrPage ? { ...page, text } : page);
+      const combinedText = updatedPages.map((page) => updatedPages.length > 1 ? `--- PAGE ${page.pageNumber} ---\n${page.text}` : page.text).join('\n\n');
+      setOcrText(combinedText);
+      setStructuredOcr({ ...structuredOcr, text: combinedText, pages: updatedPages });
+    } else {
+      setOcrText(text);
     }
     setShowDiffModal(false);
     toast({
@@ -2078,6 +2083,7 @@ settings = JSON.parse(decryptedStr);
       {showDiffModal && diffCanvases && diffProps && (
         <OcrDiffModal
           canvases={diffCanvases}
+          pageNumber={selectedOcrPage}
           settings={diffProps.settings}
           languages={diffProps.languages}
           prepOpts={diffProps.prepOpts}

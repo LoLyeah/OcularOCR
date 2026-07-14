@@ -13,14 +13,13 @@ import { useI18n } from '@/lib/i18n';
 import { parseOcrPages } from './document-viewer';
 import { PdfWorkspaceModal } from './pdf-workspace-modal';
 import { useDialogFocus } from '@/hooks/use-dialog-focus';
+import { assessBrowserLocalImport, REMOTE_IMPORT_LIMIT_BYTES } from '@/lib/import-capacity';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
   isNoPasswordVault?: boolean;
   onOpenDoc: (doc: DocumentEntry) => void;
 }
-
-const MAX_IMPORT_BYTES = 25 * 1024 * 1024;
 
 function detectDocumentType(buffer: ArrayBuffer): string | null {
   const bytes = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 16));
@@ -117,12 +116,20 @@ export function FileManager({ cryptoKey, isNoPasswordVault = false, onOpenDoc }:
       for (let i = 0; i < fileList.length; i++) {
         const file = fileList[i];
         
-        if (file.size > MAX_IMPORT_BYTES) {
+        const capacity = await assessBrowserLocalImport(file.size);
+        if (!capacity.allowed) {
           setCustomAlert({
-            title: language === 'id' ? 'File Terlalu Besar' : 'File Too Large',
-            message: language === 'id' ? `"${file.name}" melebihi batas impor 25 MB.` : `"${file.name}" exceeds the 25 MB import limit.`,
+            title: language === 'id' ? 'Penyimpanan Tidak Cukup' : 'Not Enough Storage',
+            message: language === 'id' ? `Tidak tersedia cukup ruang peramban untuk mengimpor "${file.name}" dengan aman.` : `There is not enough browser storage to import "${file.name}" safely.`,
           });
           continue;
+        }
+        if (capacity.warning) {
+          toast({
+            title: language === 'id' ? 'Mengimpor file besar' : 'Importing a large file',
+            description: language === 'id' ? 'Impor diizinkan, tetapi pemrosesan PDF dapat memakai banyak memori. Gunakan skala render lebih rendah bila perlu.' : 'The import is allowed, but PDF processing may use substantial memory. Lower the render scale if needed.',
+            variant: 'info',
+          });
         }
 
         const buffer = await file.arrayBuffer();
@@ -249,7 +256,7 @@ export function FileManager({ cryptoKey, isNoPasswordVault = false, onOpenDoc }:
       }
       
       const buffer = await blob.arrayBuffer();
-      if (buffer.byteLength > MAX_IMPORT_BYTES) throw new Error('The file exceeds the 25 MB import limit.');
+      if (buffer.byteLength > REMOTE_IMPORT_LIMIT_BYTES) throw new Error('The remote file exceeds the 25 MB import limit.');
       const detectedType = detectDocumentType(buffer);
       if (!detectedType) throw new Error('The URL did not return a supported PDF, PNG, JPEG, or WebP file.');
       const { encrypted, iv } = await encryptBuffer(buffer, cryptoKey);

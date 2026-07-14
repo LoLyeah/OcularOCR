@@ -9,6 +9,7 @@ import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 interface OcrDiffModalProps {
   canvases: HTMLCanvasElement[];
+  pageNumber: number;
   settings: AISettings;
   languages: string;
   prepOpts: any;
@@ -16,7 +17,7 @@ interface OcrDiffModalProps {
   onPickResult: (text: string, isTesseract: boolean) => void;
 }
 
-export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose, onPickResult }: OcrDiffModalProps) {
+export function OcrDiffModal({ canvases, pageNumber, settings, languages, prepOpts, onClose, onPickResult }: OcrDiffModalProps) {
   const { t } = useI18n();
   const [tesseractText, setTesseractText] = useState<string | null>(null);
   const [llmText, setLlmText] = useState<string | null>(null);
@@ -94,7 +95,7 @@ export function OcrDiffModal({ canvases, settings, languages, prepOpts, onClose,
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
           <h2 id="ocr-compare-title" className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-            Compare OCR Engines
+            Compare OCR Engines · Page {pageNumber}
           </h2>
           <button onClick={onClose} aria-label={t('close')} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer">
             <X className="h-4 w-4" />

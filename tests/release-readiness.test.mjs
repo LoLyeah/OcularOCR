@@ -26,12 +26,15 @@ test('platform preflight reports missing required browser capabilities', () => {
   for (const feature of ['IndexedDB', 'Web Crypto', 'WebAssembly', 'Web Workers']) assert.ok(unsupported.missing.includes(feature));
 });
 
-test('new vaults require password confirmation while legacy open mode remains readable', () => {
+test('new vaults offer confirmed encryption or an explicitly warned no-password mode', () => {
   const source = readFileSync('components/vault-setup.tsx', 'utf8');
   assert.match(source, /password !== confirmPassword/);
   assert.match(source, /mode === 'unencrypted'/);
-  assert.doesNotMatch(source, /handleSetupUnencrypted/);
-  assert.doesNotMatch(source, /localStorage\.setItem\('vault_mode', 'unencrypted'\)/);
+  assert.match(source, /handleSetupUnencrypted/);
+  assert.match(source, /localStorage\.setItem\('vault_mode', 'unencrypted'\)/);
+  assert.match(readFileSync('lib/i18n.tsx', 'utf8'), /do not use it for sensitive documents or API keys/);
+  assert.match(readFileSync('components/dashboard.tsx', 'utf8'), /localNoPassword/);
+  assert.match(readFileSync('components/file-manager.tsx', 'utf8'), /noPasswordStorageBadge/);
 });
 
 test('production configuration ships baseline browser security headers', () => {

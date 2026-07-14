@@ -18,13 +18,13 @@
 
 **OcularOCR** is a Progressive Web App (PWA) designed to safely store, organize, and perform Optical Character Recognition (OCR) on your sensitive documents. 
 
-Traditional OCR tools require uploading sensitive documents (invoices, tax forms, IDs) to remote servers. OcularOCR stores files and extracted data in a **local encrypted vault**: data is encrypted in your browser before it is written to IndexedDB. Local OCR keeps document content on the device. Cloud AI features are optional, require explicit consent, and send the selected page images or extracted text to the configured provider.
+Traditional OCR tools require uploading sensitive documents (invoices, tax forms, IDs) to remote servers. OcularOCR stores files and extracted data in a **local vault**. The recommended password mode encrypts data in your browser before it is written to IndexedDB; an explicitly warned no-password mode is also available for non-sensitive use. Local OCR keeps document content on the device. Cloud AI features are optional, require explicit consent, and send the selected page images or extracted text to the configured provider.
 
 ---
 
 ## ✨ Core Features
 
-*   **🔒 Local Encrypted Vault**: Documents, metadata, tags, settings, and AI summaries are encrypted client-side using **AES-GCM (256-bit)** keys. New vaults use PBKDF2-SHA-256 with 600,000 iterations; existing vaults retain their versioned derivation settings for compatibility.
+*   **🔒 Local Vault Choices**: The recommended password vault encrypts documents, metadata, tags, settings, and AI summaries client-side using **AES-GCM (256-bit)** keys. New encrypted vaults use PBKDF2-SHA-256 with 600,000 iterations. A clearly warned no-password mode automatically unlocks and should never hold sensitive documents or API keys.
 *   **🤖 Multi-Engine OCR & Vision**:
     *   **Cloud AI OCR**: Connects to Google Gemini or an OpenAI-compatible cloud endpoint after explicit consent.
     *   **Local AI OCR**: Connects directly from the browser to Ollama or another OpenAI-compatible endpoint running on the same device.
@@ -54,7 +54,7 @@ The **1.0 Stable Release milestone** is implemented in the current development b
 
 ## 🛡️ Security Architecture
 
-OcularOCR uses a strict **local-first, zero-knowledge** architecture:
+OcularOCR uses a **local-first** architecture. The recommended password mode provides the encrypted flow below:
 
 ```mermaid
 graph TD
@@ -75,6 +75,8 @@ graph TD
 2.  **Encryption**: Documents, document metadata, tags, OCR results, settings, and summaries are encrypted with unique initialization vectors (IVs) and stored in `IndexedDB` via `idb-keyval`.
 3.  **AI privacy boundary**: Local Tesseract OCR stays on-device. Remote AI OCR, tagging, cleanup, or summaries require explicit cloud-processing consent and send only the content needed for that operation directly from the browser to the configured provider. API keys are encrypted at rest but decrypted in browser memory for those requests; there is no secret-hiding AI proxy.
 4.  **On-the-Fly Decryption**: When viewing a document, the ciphertext is decrypted temporarily in browser memory. Locking the vault discards the crypto keys instantly.
+
+The optional no-password mode automatically unlocks with a built-in local key and therefore does **not** provide meaningful protection from anyone who can access the browser profile. It is intended only for non-sensitive workflows.
 
 ---
 

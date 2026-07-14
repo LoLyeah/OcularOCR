@@ -11,7 +11,7 @@
 
 ## Browser and device gates
 
-- [x] New encrypted-vault setup and password confirmation
+- [x] Encrypted-vault confirmation and warned no-password setup paths
 - [x] Existing vault unlock path retained
 - [x] Desktop and narrow mobile layout smoke test
 - [x] Manifest, service-worker registration, and offline asset preparation

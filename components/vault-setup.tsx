@@ -18,7 +18,7 @@ import {
   setKdfIterations,
   setVerificationToken,
 } from '@/lib/storage';
-import { Unlock, AlertTriangle, Loader2, Fingerprint } from 'lucide-react';
+import { Lock, Unlock, AlertTriangle, ShieldOff, Loader2, Fingerprint } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useI18n } from '@/lib/i18n';
 
@@ -35,14 +35,14 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showResetWarning, setShowResetWarning] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const [setupStep, setSetupStep] = useState<'set_password' | 'unlock_passkey' | null>(null);
+  const [setupStep, setSetupStep] = useState<'choose_mode' | 'set_password' | 'unlock_passkey' | null>(null);
 
   useEffect(() => {
     async function checkVault() {
       const verifyToken = await getVerificationToken();
       if (!verifyToken) {
         setIsNewVault(true);
-        setSetupStep('set_password');
+        setSetupStep('choose_mode');
         setIsChecking(false);
       } else {
         const mode = localStorage.getItem('vault_mode');
@@ -102,6 +102,23 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
       autoPrompt();
     }
   }, [setupStep, onUnlock]);
+
+  const handleSetupUnencrypted = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const salt = await getSalt();
+      setKdfIterations(CURRENT_KDF_ITERATIONS);
+      const key = await deriveKey('OPEN_VAULT_MODE_XYZ_123', salt, CURRENT_KDF_ITERATIONS);
+      const { encrypted, iv } = await encryptString('VAULT_VALID', key);
+      await setVerificationToken(encrypted, iv);
+      localStorage.setItem('vault_mode', 'unencrypted');
+      onUnlock(key);
+    } catch {
+      setError(t('failedSetupUnencrypted'));
+      setIsLoading(false);
+    }
+  };
 
   const handleUnlockPasskey = async () => {
     setIsLoading(true);
@@ -247,6 +264,39 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
                 </button>
               </div>
             </motion.div>
+          ) : setupStep === 'choose_mode' ? (
+            <motion.div
+              key="choose-mode"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.15 }}
+              className="flex flex-col items-center text-center"
+            >
+              <div className="mb-4">
+                <Image src="/icon.svg" width={64} height={64} className="rounded-2xl shadow-md select-none" alt="OcularOCR" referrerPolicy="no-referrer" />
+              </div>
+              <h1 className="text-xl font-bold">{t('welcomeToOcular')}</h1>
+              <p className="mb-6 mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t('chooseVaultMode')}</p>
+              <div className="flex w-full flex-col gap-3">
+                <button
+                  onClick={() => setSetupStep('set_password')}
+                  className="flex flex-col items-start rounded border border-indigo-200 bg-indigo-50 p-4 text-left transition-colors hover:bg-indigo-100 dark:border-indigo-800/50 dark:bg-indigo-900/20 dark:hover:bg-indigo-900/40"
+                >
+                  <span className="mb-1 flex items-center gap-2 font-bold text-indigo-900 dark:text-indigo-300"><Lock className="h-4 w-4" />{t('encryptedVaultRecommended')}</span>
+                  <span className="text-xs leading-relaxed text-indigo-700 dark:text-indigo-400/80">{t('encryptedVaultHelp')}</span>
+                </button>
+                <button
+                  onClick={handleSetupUnencrypted}
+                  disabled={isLoading}
+                  className="flex flex-col items-start rounded border border-amber-300 bg-amber-50 p-4 text-left transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800/60 dark:bg-amber-950/20 dark:hover:bg-amber-950/40"
+                >
+                  <span className="mb-1 flex items-center gap-2 font-bold text-amber-900 dark:text-amber-300"><ShieldOff className="h-4 w-4" />{t('unencryptedVault')}</span>
+                  <span className="text-xs leading-relaxed text-amber-800 dark:text-amber-400">{t('unencryptedVaultWarning')}</span>
+                </button>
+              </div>
+              {error && <p className="mt-4 text-xs font-medium text-red-500 dark:text-red-400">{error}</p>}
+            </motion.div>
           ) : setupStep === 'unlock_passkey' ? (
             <motion.div
               key="unlock-passkey"
@@ -379,15 +429,23 @@ export function VaultSetup({ onUnlock }: VaultSetupProps) {
                   </button>
                 </div>
               )}
+
+              {isNewVault && (
+                <div className="mt-4 flex justify-center">
+                  <button type="button" onClick={() => setSetupStep('choose_mode')} className="text-xs font-bold text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400">
+                    {t('backToVaultOptions')}
+                  </button>
+                </div>
+              )}
               
-              <div className="mt-6 flex justify-center">
+              {!isNewVault && <div className="mt-6 flex justify-center">
                 <button 
                   onClick={() => setShowResetWarning(true)}
                   className="text-xs font-medium text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
                 >
                   {t('forgotPasswordReset')}
                 </button>
-              </div>
+              </div>}
             </motion.div>
           )}
         </AnimatePresence>

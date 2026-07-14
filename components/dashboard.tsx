@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import Image from 'next/image';
 import { Lock, Settings, FileText, Upload, BrainCircuit, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,6 +21,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
   const [activeDoc, setActiveDoc] = useState<DocumentEntry | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'files' | 'guide'>('files');
+  const [isNoPasswordVault] = useState(() => typeof window !== 'undefined' && localStorage.getItem('vault_mode') === 'unencrypted');
   const { language, t } = useI18n();
 
   return (
@@ -78,9 +79,9 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800/50 rounded-full text-[10px] font-bold text-nowrap">
-              <span className="w-1.5 h-1.5 bg-green-500 dark:bg-green-400 rounded-full"></span>
-              {t('localEncrypted')}
+            <div className={`hidden sm:flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold text-nowrap ${isNoPasswordVault ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-400' : 'border-green-200 bg-green-50 text-green-700 dark:border-green-800/50 dark:bg-green-900/20 dark:text-green-400'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isNoPasswordVault ? 'bg-amber-500 dark:bg-amber-400' : 'bg-green-500 dark:bg-green-400'}`}></span>
+              {t(isNoPasswordVault ? 'localNoPassword' : 'localEncrypted')}
             </div>
             <motion.button
               whileHover={{ scale: 1.05 }}
@@ -116,6 +117,7 @@ export function Dashboard({ cryptoKey, onLock }: DashboardProps) {
               <FileManager
                 key="manager"
                 cryptoKey={cryptoKey}
+                isNoPasswordVault={isNoPasswordVault}
                 onOpenDoc={(doc) => {
                   setActiveTab('files');
                   setActiveDoc(doc);

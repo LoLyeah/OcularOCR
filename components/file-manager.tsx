@@ -16,6 +16,7 @@ import { useDialogFocus } from '@/hooks/use-dialog-focus';
 
 interface FileManagerProps {
   cryptoKey: CryptoKey;
+  isNoPasswordVault?: boolean;
   onOpenDoc: (doc: DocumentEntry) => void;
 }
 
@@ -34,7 +35,7 @@ function detectDocumentType(buffer: ArrayBuffer): string | null {
   return null;
 }
 
-export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
+export function FileManager({ cryptoKey, isNoPasswordVault = false, onOpenDoc }: FileManagerProps) {
   const { t, language } = useI18n();
   const [docs, setDocs] = useState<(DocumentEntry & { decryptedTags: string[] })[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -942,7 +943,7 @@ export function FileManager({ cryptoKey, onOpenDoc }: FileManagerProps) {
                 {t('supportsPdfImagesHelp')}
               </p>
               <div className="mt-4 flex items-center gap-1.5 text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 dark:text-slate-400 font-mono">
-                <span>{t('clientSideEncryptionBadge')}</span>
+                <span>{t(isNoPasswordVault ? 'noPasswordStorageBadge' : 'clientSideEncryptionBadge')}</span>
               </div>
             </div>
           </div>

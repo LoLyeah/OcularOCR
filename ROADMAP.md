@@ -145,8 +145,8 @@ or claim capabilities that have not been checked.
 
 ### Launch hardening
 
-- Require password confirmation for every new encrypted vault and retire the
-  weaker passphrase-free option while preserving access to existing vaults.
+- Require password confirmation for encrypted vaults while keeping an explicit,
+  clearly warned no-password option for non-sensitive local workflows.
 - Add production browser security headers, platform capability preflight, safe
   backup-size handling, and semantic update-version comparison.
 - Verify encrypted settings, backup versions, legacy OCR records, and existing

@@ -1,13 +1,15 @@
 # OcularOCR 1.0.0 Release Candidate
 
-OcularOCR 1.0 brings the encrypted document workflow—from import through OCR,
+OcularOCR 1.0 brings the local document workflow—from import through OCR,
 correction, tables, and export—to a stable release baseline. The application
-remains local-first: files, metadata, OCR results, tags, summaries, provider
-settings, and backups are encrypted in the browser vault.
+remains local-first. The recommended password vault encrypts files, metadata,
+OCR results, tags, summaries, provider settings, and backups in the browser;
+the optional no-password mode is explicitly limited to non-sensitive use.
 
 ## Complete workflow
 
-1. Create a vault with a confirmed password of at least 12 characters.
+1. Choose a recommended encrypted vault with a confirmed password of at least
+   12 characters, or explicitly choose the warned no-password local mode.
 2. Import PDF, PNG, JPEG, or WebP files up to 25 MB each, including supported
    public URLs.
 3. Use offline Tesseract OCR or a capability-tested Gemini,
@@ -20,10 +22,11 @@ settings, and backups are encrypted in the browser vault.
 
 ## Stability and security
 
-- New vaults always require password encryption and password confirmation.
-- Existing passphrase-free legacy vaults still open so their data can be
-  backed up and migrated; the weaker mode can no longer be selected for a new
-  vault.
+- New encrypted vaults require password confirmation.
+- A clearly warned unencrypted/no-password mode remains available for
+  non-sensitive workflows and automatically unlocks with the browser profile.
+- The guide includes a dedicated local Ollama installation, vision-model,
+  endpoint, CORS, and troubleshooting walkthrough.
 - Production responses include framing, content-type, referrer, permissions,
   opener, and content-security protections.
 - Unsupported browsers receive a clear preflight error before vault access.

@@ -1,4 +1,5 @@
 import { AISettings, StructuredOcrResult } from './storage';
+import { normalizeStructuredOcrResult, STRUCTURED_OCR_VERSION, tablePlainText } from './structured-ocr';
 import { GoogleGenAI } from '@google/genai';
 import { assertAiRequestAllowed } from './ai-policy';
 
@@ -268,6 +269,9 @@ interface AiBlock {
   text: string;
   type: 'text' | 'heading' | 'table' | 'list';
   normalized_bbox: [number, number, number, number];
+  table?: {
+    rows: Array<{ cells: Array<{ text: string; isHeader: boolean; rowSpan: number; colSpan: number }> }>;
+  } | null;
 }
 
 interface AiPageBlocks {
@@ -290,8 +294,10 @@ For each page, identify text blocks and provide for each block:
 - "text": the exact text content
 - "type": one of "text", "heading", "table", "list"
 - "normalized_bbox": [x0, y0, x1, y1] where coordinates are normalized 0-1 relative to image width/height
+- "table": null for non-table blocks. For tables, return {"rows":[{"cells":[{"text":"...","isHeader":true,"rowSpan":1,"colSpan":1}]}]}
 
 Preserve reading order by listing blocks top-to-bottom, left-to-right.
+Preserve list markers, heading hierarchy, table headers, empty cells, and merged-cell spans.
 Do not include any text outside the JSON structure.
 Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
 
@@ -367,9 +373,45 @@ Return exactly: {"pages": [{"pageNumber": 1, "blocks": [...]}]}`;
                           normalized_bbox: {
                             type: 'array',
                             items: { type: 'number' }
+                          },
+                          table: {
+                            anyOf: [
+                              { type: 'null' },
+                              {
+                                type: 'object',
+                                properties: {
+                                  rows: {
+                                    type: 'array',
+                                    items: {
+                                      type: 'object',
+                                      properties: {
+                                        cells: {
+                                          type: 'array',
+                                          items: {
+                                            type: 'object',
+                                            properties: {
+                                              text: { type: 'string' },
+                                              isHeader: { type: 'boolean' },
+                                              rowSpan: { type: 'integer' },
+                                              colSpan: { type: 'integer' }
+                                            },
+                                            required: ['text', 'isHeader', 'rowSpan', 'colSpan'],
+                                            additionalProperties: false
+                                          }
+                                        }
+                                      },
+                                      required: ['cells'],
+                                      additionalProperties: false
+                                    }
+                                  }
+                                },
+                                required: ['rows'],
+                                additionalProperties: false
+                              }
+                            ]
                           }
                         },
-                        required: ['text', 'type', 'normalized_bbox'],
+                        required: ['text', 'type', 'normalized_bbox', 'table'],
                         additionalProperties: false
                       }
                     }
@@ -437,11 +479,25 @@ function structuredResponseToOcrResult(
     const dim = pageDimensions[p.pageNumber - 1] || { width: 0, height: 0 };
 
     let pageText = '';
-    const blocks = (p.blocks || []).map((b) => {
+    const blocks = (p.blocks || []).map((b, blockIndex) => {
       const [nx0 = 0, ny0 = 0, nx1 = 0, ny1 = 0] = b.normalized_bbox || [];
-      const blockText = b.text;
+      const table = b.type === 'table' && b.table?.rows?.length ? {
+        id: `page-${pageNumber}-table-${blockIndex + 1}`,
+        pageNumber,
+        rows: b.table.rows.map((row) => ({
+          cells: row.cells.map((cell) => ({
+            text: cell.text,
+            ...(cell.isHeader ? { isHeader: true } : {}),
+            ...(cell.rowSpan > 1 ? { rowSpan: cell.rowSpan } : {}),
+            ...(cell.colSpan > 1 ? { colSpan: cell.colSpan } : {}),
+          })),
+        })),
+        source: 'provider' as const,
+      } : undefined;
+      const blockText = table ? tablePlainText(table) : b.text;
       pageText += blockText + '\n';
       return {
+        id: `page-${pageNumber}-block-${blockIndex + 1}`,
         text: blockText,
         type: b.type as 'text' | 'heading' | 'table' | 'list',
         bbox: {
@@ -449,7 +505,8 @@ function structuredResponseToOcrResult(
           y0: Math.round(ny0 * dim.height),
           x1: Math.round(nx1 * dim.width),
           y1: Math.round(ny1 * dim.height)
-        }
+        },
+        ...(table ? { table } : {})
       };
     });
 
@@ -463,11 +520,14 @@ function structuredResponseToOcrResult(
       pageNumber,
       text: pageText.trim(),
       words: [],
-      blocks
+      blocks,
+      tables: blocks.map((block) => block.table).filter(Boolean),
+      width: dim.width,
+      height: dim.height,
     };
   });
 
-  return { text: concatenatedText.trim(), pages };
+  return normalizeStructuredOcrResult({ version: STRUCTURED_OCR_VERSION, text: concatenatedText.trim(), pages });
 }
 
 export async function correctOcrText(

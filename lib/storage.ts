@@ -70,6 +70,30 @@ export interface OcrWord {
   confidence?: number;
 }
 
+export type OcrBlockType = 'text' | 'heading' | 'table' | 'list';
+
+export interface OcrTableCell {
+  text: string;
+  isHeader?: boolean;
+  rowSpan?: number;
+  colSpan?: number;
+  bbox?: { x0: number; y0: number; x1: number; y1: number };
+  confidence?: number;
+}
+
+export interface OcrTableRow {
+  cells: OcrTableCell[];
+}
+
+export interface OcrTable {
+  id: string;
+  pageNumber: number;
+  rows: OcrTableRow[];
+  bbox?: { x0: number; y0: number; x1: number; y1: number };
+  confidence?: number;
+  source?: 'offline' | 'provider' | 'user';
+}
+
 export interface OcrLine {
   bbox: { x0: number; y0: number; x1: number; y1: number };
   text: string;
@@ -77,9 +101,14 @@ export interface OcrLine {
 }
 
 export interface OcrBlock {
+  id?: string;
   bbox: { x0: number; y0: number; x1: number; y1: number };
   text: string;
-  type: 'text' | 'heading' | 'table' | 'list';
+  type: OcrBlockType;
+  level?: number;
+  listStyle?: 'ordered' | 'unordered';
+  table?: OcrTable;
+  confidence?: number;
 }
 
 export interface OcrPageData {
@@ -88,9 +117,13 @@ export interface OcrPageData {
   words: OcrWord[];
   lines?: OcrLine[];
   blocks?: OcrBlock[];
+  tables?: OcrTable[];
+  width?: number;
+  height?: number;
 }
 
 export interface StructuredOcrResult {
+  version?: number;
   text: string;
   pages: OcrPageData[];
 }

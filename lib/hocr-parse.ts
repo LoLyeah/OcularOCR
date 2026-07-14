@@ -6,6 +6,11 @@ function parseBbox(title: string): { x0: number; y0: number; x1: number; y1: num
   return { x0: parseInt(m[1]), y0: parseInt(m[2]), x1: parseInt(m[3]), y1: parseInt(m[4]) };
 }
 
+function parseConfidence(title: string): number | undefined {
+  const match = title.match(/x_wconf\s+(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : undefined;
+}
+
 function getTextContent(el: Element): string {
   let text = '';
   for (const child of el.childNodes) {
@@ -126,7 +131,8 @@ function processParagraph(
         y0: Math.round(wBbox.y0 * scaleY),
         x1: Math.round(wBbox.x1 * scaleX),
         y1: Math.round(wBbox.y1 * scaleY)
-      }
+      },
+      confidence: parseConfidence(wEl.getAttribute('title') || '')
     });
   }
 

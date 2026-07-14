@@ -39,8 +39,15 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 *   **📱 Progressive Web App (PWA)**: Install OcularOCR to your desktop or mobile home screen. The Offline OCR settings show readiness, prepare the app shell, and manage persistent language packs.
 *   **📁 Smart Document Manager**: Search, filter, tag, and view your documents securely inside a unified, responsive dashboard.
 *   **🧰 Local PDF Workspace**: Merge PDFs, reorder or rotate pages, duplicate and delete pages, extract selections, undo edits, and save the result as a new encrypted PDF without modifying the originals.
+*   **📐 Structured OCR & Rich Export**: Online and offline OCR share an editable, versioned document model for headings, paragraphs, lists, and tables. Export corrected structure to Markdown, reflowed or searchable PDF, DOCX, CSV, and JSON.
 *   **🛟 Reliability & Recovery**: Recoverable crash screens keep failures away from raw vault data, while storage diagnostics report quota pressure and browser cleanup protection before local data is at risk.
 *   **♿ Release Readiness**: Keyboard-safe dialogs, visible focus, skip navigation, reduced-motion support, accessible PDF reordering, and automated CI gates prepare the app for 1.0.
+
+---
+
+## 🗺️ Roadmap
+
+**0.21.0 — Structured OCR and Rich Export** is implemented in the current development branch. The next milestone is **0.22.0 — Guide, Settings, and Provider Refresh**, which replaces stale model guidance with verified, capability-based configuration and rewrites the English and Indonesian documentation around the shipped app. See the [project roadmap](ROADMAP.md) for scope and completion criteria.
 
 ---
 

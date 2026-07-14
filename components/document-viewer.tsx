@@ -18,9 +18,11 @@ import type { PreprocessingOptions, ImageQuality } from '@/lib/preprocessing';
 import { OcrOverlay } from './ocr-overlay';
 import { RegionSelector, type RegionRect } from './region-selector';
 import { ocrRegions } from '@/lib/region-ocr';
-import { detectTables, tableToCsv, tableToMarkdown, type DetectedTable } from '@/lib/table-extract';
-import { exportDocx, exportJson } from '@/lib/export-formats';
+import { detectTables, tableAsBlock, type DetectedTable } from '@/lib/table-extract';
+import { exportDocx, exportJson, exportMarkdown, exportTablesCsv } from '@/lib/export-formats';
+import { normalizeStructuredOcrResult, replacePageBlocks, structureConfidence, STRUCTURED_OCR_VERSION } from '@/lib/structured-ocr';
 import { OcrDiffModal } from './ocr-diff-modal';
+import { StructureEditor } from './structure-editor';
 
 interface DocumentViewerProps {
   doc: DocumentEntry;
@@ -82,8 +84,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [isRegionMode, setIsRegionMode] = useState(false);
   const [regions, setRegions] = useState<RegionRect[]>([]);
   const [regionOcrResult, setRegionOcrResult] = useState('');
-  const [detectedTables, setDetectedTables] = useState<DetectedTable[]>([]);
+  const [, setDetectedTables] = useState<DetectedTable[]>([]);
   const [isDetectingTables, setIsDetectingTables] = useState(false);
+  const [showStructureEditor, setShowStructureEditor] = useState(false);
   const [showDiffModal, setShowDiffModal] = useState(false);
   const [diffCanvases, setDiffCanvases] = useState<HTMLCanvasElement[] | null>(null);
   const [diffProps, setDiffProps] = useState<{
@@ -106,6 +109,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   const [pdfCurrentPage, setPdfCurrentPage] = useState<number>(0);
   const [pdfTotalPages, setPdfTotalPages] = useState<number>(0);
   const pendingPrepOptsRef = useRef<PreprocessingOptions | null>(null);
+  const ocrAbortRef = useRef<AbortController | null>(null);
   
   const pdfContainerRef = useRef<HTMLDivElement | null>(null);
   const [pdfContainerTrigger, setPdfContainerTrigger] = useState<number>(0);
@@ -151,8 +155,14 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           try {
             const parsed = JSON.parse(text);
             if (parsed && typeof parsed === 'object' && 'text' in parsed) {
-              setOcrText(parsed.text);
-              setStructuredOcr(parsed);
+              const normalized = normalizeStructuredOcrResult(parsed);
+              setOcrText(normalized.text);
+              setStructuredOcr(normalized);
+              if (parsed.version !== STRUCTURED_OCR_VERSION) {
+                const migrated = await encryptString(JSON.stringify(normalized), cryptoKey);
+                const { decryptedTags, ...docToSave } = doc as any;
+                await saveDocument({ ...docToSave, encryptedOcrText: migrated.encrypted, ocrTextIv: migrated.iv }, cryptoKey);
+              }
             } else {
               setOcrText(text);
               setStructuredOcr(null);
@@ -380,6 +390,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
   };
 
   const handleRunOcr = async () => {
+    ocrAbortRef.current?.abort();
+    const abortController = new AbortController();
+    ocrAbortRef.current = abortController;
     setIsProcessingOcr(true);
     setOcrProgressText(language === 'id' ? 'Menyiapkan berkas...' : 'Preparing document...');
     setActiveTab('ocr');
@@ -423,6 +436,7 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
           const useStructured = settings?.structuredLlmOcr;
 
           for (let pageNum = 1; pageNum <= pdfTotalPages; pageNum++) {
+            if (abortController.signal.aborted) throw new DOMException('OCR cancelled', 'AbortError');
             setOcrProgressText(
               language === 'id'
                 ? `Mengirim halaman ${pageNum}/${pdfTotalPages} ke AI...`
@@ -514,7 +528,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   ? `Memproses Halaman ${pageNum}/${pdfTotalPages} (${percent}%)` 
                   : `Processing Page ${pageNum}/${pdfTotalPages} (${percent}%)`
               );
-            }
+            },
+            abortController.signal,
           );
           extractedText = finalOcrResult.text;
         }
@@ -576,7 +591,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
                   ? `Memproses Halaman (${percent}%)` 
                   : `Processing Page (${percent}%)`
               );
-            }
+            },
+            abortController.signal,
           );
           extractedText = finalOcrResult.text;
         }
@@ -620,6 +636,8 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         }
       }
       
+      finalOcrResult = normalizeStructuredOcrResult(finalOcrResult);
+      extractedText = finalOcrResult.text;
       setOcrText(extractedText);
       setStructuredOcr(finalOcrResult);
       
@@ -653,7 +671,9 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
         variant: "success"
       });
     } catch (err: any) {
-      if (err instanceof VisionModelUnsupportedError) {
+      if (err?.name === 'AbortError') {
+        toast({ title: language === 'id' ? 'OCR dibatalkan' : 'OCR cancelled', variant: 'info' });
+      } else if (err instanceof VisionModelUnsupportedError) {
         toast({
           title: language === 'id' ? 'Model Tidak Mendukung Vision' : 'Model Does Not Support Vision',
           description: err.message,
@@ -664,8 +684,11 @@ export function DocumentViewer({ doc, cryptoKey, onClose }: DocumentViewerProps)
       }
       console.error('OCR failed', err);
     } finally {
-      setIsProcessingOcr(false);
-      setOcrProgressText('');
+      if (ocrAbortRef.current === abortController) {
+        ocrAbortRef.current = null;
+        setIsProcessingOcr(false);
+        setOcrProgressText('');
+      }
     }
   };
 
@@ -991,6 +1014,10 @@ settings = JSON.parse(decryptedStr);
           structuredOcr
         });
       } else {
+        const confidence = structuredOcr ? structureConfidence(structuredOcr) : undefined;
+        if (confidence !== undefined && confidence < 70) {
+          toast({ title: language === 'id' ? 'Periksa struktur sebelum ekspor' : 'Review structure before export', description: `${Math.round(confidence)}% layout confidence`, variant: 'info' });
+        }
         toast({
           title: language === 'id' ? "Mengekspor PDF Reflow..." : "Exporting Reflowed PDF...",
           variant: "info"
@@ -1022,15 +1049,19 @@ settings = JSON.parse(decryptedStr);
 
   const exportFile = async (type: 'txt' | 'md') => {
     if (!ocrText) return;
-    
-    const mime = type === 'md' ? 'text/markdown' : 'text/plain';
-    const blob = new Blob([ocrText], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${doc.name}-extracted.${type}`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (type === 'md' && structuredOcr) {
+      const confidence = structureConfidence(structuredOcr);
+      if (confidence !== undefined && confidence < 70) toast({ title: language === 'id' ? 'Periksa struktur sebelum ekspor' : 'Review structure before export', description: `${Math.round(confidence)}% layout confidence`, variant: 'info' });
+      exportMarkdown(structuredOcr, `${doc.name}-extracted.md`);
+    } else {
+      const blob = new Blob([ocrText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${doc.name}-extracted.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
     
     toast({
       title: language === 'id' ? `${type.toUpperCase()} berhasil diekspor` : `${type.toUpperCase()} exported successfully`,
@@ -1086,11 +1117,20 @@ settings = JSON.parse(decryptedStr);
     }
     setIsDetectingTables(true);
     try {
-      const tables = detectTables(page.words, page.words.reduce((m, w) => Math.max(m, w.bbox.x1), 0), page.words.reduce((m, w) => Math.max(m, w.bbox.y1), 0));
+      const tables = detectTables(
+        page.words,
+        page.width || page.words.reduce((m, w) => Math.max(m, w.bbox.x1), 0),
+        page.height || page.words.reduce((m, w) => Math.max(m, w.bbox.y1), 0),
+        page.pageNumber,
+      );
       setDetectedTables(tables);
       if (tables.length === 0) {
         toast({ title: t('noTablesFound'), variant: "info" });
       } else {
+        const existingBlocks = (page.blocks || []).filter((block) => block.type !== 'table' || block.table?.source !== 'offline');
+        const next = replacePageBlocks(structuredOcr, page.pageNumber, [...existingBlocks, ...tables.map(tableAsBlock)]);
+        setStructuredOcr(next);
+        setOcrText(next.text);
         toast({ title: `${t('tablesDetected')}: ${tables.length}`, variant: "success" });
       }
     } catch (err) {
@@ -1101,29 +1141,20 @@ settings = JSON.parse(decryptedStr);
   };
 
   const exportTableCsv = () => {
-    if (detectedTables.length === 0) return;
-    const csv = detectedTables.map(t => tableToCsv(t)).join('\n\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${doc.name}-tables.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!structuredOcr) return;
+    exportTablesCsv(structuredOcr, `${doc.name}-tables.csv`);
     toast({ title: 'CSV exported', variant: "success" });
   };
 
-  const exportTableMarkdown = () => {
-    if (detectedTables.length === 0) return;
-    const md = detectedTables.map(t => tableToMarkdown(t)).join('\n\n');
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${doc.name}-tables.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast({ title: 'Markdown exported', variant: "success" });
+  const saveStructureChanges = async (blocks: NonNullable<StructuredOcrResult['pages'][number]['blocks']>) => {
+    if (!structuredOcr) return;
+    const next = replacePageBlocks(structuredOcr, selectedOcrPage, blocks);
+    const { encrypted, iv } = await encryptString(JSON.stringify(next), cryptoKey);
+    const { decryptedTags, ...docToSave } = doc as any;
+    await saveDocument({ ...docToSave, encryptedOcrText: encrypted, ocrTextIv: iv }, cryptoKey);
+    setStructuredOcr(next);
+    setOcrText(next.text);
+    toast({ title: language === 'id' ? 'Struktur dokumen disimpan' : 'Document structure saved', variant: 'success' });
   };
 
   const handleExportDocx = async () => {
@@ -1193,6 +1224,7 @@ settings = JSON.parse(decryptedStr);
 
   const parsedOcrPagesList = parseOcrPages(ocrText);
   const activeOcrPageText = parsedOcrPagesList.find(p => p.pageNumber === selectedOcrPage)?.text || ocrText;
+  const currentStructureConfidence = structuredOcr ? structureConfidence(structuredOcr) : undefined;
 
   const LANGUAGES_LIST = [
     { code: 'eng', label: 'EN', title: 'English' },
@@ -1453,6 +1485,13 @@ settings = JSON.parse(decryptedStr);
                           ? (language === 'id' ? 'Menjalankan OCR bertenaga AI...' : 'Running AI-powered optical character recognition...')
                           : (language === 'id' ? 'Menjalankan OCR lokal...' : 'Running local optical character recognition...'))}
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => ocrAbortRef.current?.abort()}
+                        className="mt-4 rounded border border-slate-300 bg-white px-3 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                      >
+                        {language === 'id' ? 'Batalkan OCR' : 'Cancel OCR'}
+                      </button>
                     </div>
                   ) : ocrText ? (
                     <div className="flex flex-col h-full gap-4">
@@ -1537,6 +1576,19 @@ settings = JSON.parse(decryptedStr);
                             {t('exportJson')}
                           </button>
                           <button
+                            onClick={() => setShowStructureEditor((value) => !value)}
+                            aria-expanded={showStructureEditor}
+                            className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/50 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <ScanText className="h-3 w-3" />
+                            {showStructureEditor ? 'Hide structure' : 'Edit structure'}
+                          </button>
+                          {currentStructureConfidence !== undefined && (
+                            <span className={`rounded px-2 py-1 text-[9px] font-bold ${currentStructureConfidence < 70 ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'}`}>
+                              Layout {Math.round(currentStructureConfidence)}%
+                            </span>
+                          )}
+                          <button
                             onClick={() => handleExportPdf('searchable')}
                             disabled={!structuredOcr || !structuredOcr.pages || structuredOcr.pages.length === 0 || !structuredOcr.pages.some(p => p.words?.length || p.lines?.length || p.blocks?.length)}
                             className="px-2 py-1 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-50/10 border border-indigo-200 dark:border-indigo-800/40 text-[10px] font-bold rounded flex items-center gap-1 cursor-pointer transition-colors"
@@ -1563,28 +1615,24 @@ settings = JSON.parse(decryptedStr);
                                 {isDetectingTables ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
                                 {t('detectTables')}
                               </button>
-                              {detectedTables.length > 0 && (
-                                <>
-                                  <button
-                                    onClick={exportTableCsv}
-                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 cursor-pointer transition-colors"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    CSV
-                                  </button>
-                                  <button
-                                    onClick={exportTableMarkdown}
-                                    className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 cursor-pointer transition-colors"
-                                  >
-                                    <Download className="h-3 w-3" />
-                                    MD
-                                  </button>
-                                </>
-                              )}
                             </>
+                          )}
+                          {structuredOcr?.pages.some((page) => (page.tables?.length || 0) > 0) && (
+                            <button
+                              onClick={exportTableCsv}
+                              className="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold rounded border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Download className="h-3 w-3" />
+                              Tables CSV
+                            </button>
                           )}
                         </div>
                       </div>
+
+                      {showStructureEditor && structuredOcr && (() => {
+                        const page = structuredOcr.pages.find((candidate) => candidate.pageNumber === selectedOcrPage) || structuredOcr.pages[0];
+                        return page ? <StructureEditor key={page.pageNumber} pageNumber={page.pageNumber} blocks={page.blocks || []} onSave={saveStructureChanges} /> : null;
+                      })()}
 
                       {/* Pagination if single view mode */}
                       {ocrViewMode === 'single' && parsedOcrPagesList.length > 1 && (

@@ -2,6 +2,8 @@ import { ocrPool } from './ocr-pool';
 import { preprocessImage, PreprocessingOptions, rotateCanvas } from './preprocessing';
 import { StructuredOcrResult, OcrWord } from './storage';
 import { parseHocr } from './hocr-parse';
+import { detectTables, tableAsBlock } from './table-extract';
+import { inferOfflineBlockTypes, normalizeStructuredOcrResult, STRUCTURED_OCR_VERSION } from './structured-ocr';
 
 
 async function autoRotateCanvasIfNeeded(
@@ -78,8 +80,10 @@ export async function performOCR(
   imageSource: HTMLCanvasElement | HTMLImageElement | (HTMLCanvasElement | HTMLImageElement)[],
   language: string = 'eng',
   options?: PreprocessingOptions,
-  onProgress?: (pageIndex: number, progress: number) => void
+  onProgress?: (pageIndex: number, progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<StructuredOcrResult> {
+  if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
   const sources = Array.isArray(imageSource) ? imageSource : [imageSource];
   
   // 1. Preprocess all pages
@@ -95,6 +99,7 @@ export async function performOCR(
 
   const preprocessedCanvases = await Promise.all(
     sources.map(async src => {
+      if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
       const res = await preprocessImage(src, prepOpts);
       let finalCanvas = res.canvas;
 
@@ -117,7 +122,9 @@ export async function performOCR(
   );
 
   // 2. Perform parallel OCR using the worker pool
+  if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
   const results = await ocrPool.performOCR(preprocessedCanvases, language, onProgress);
+  if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
 
   // 3. Combine results
   let concatenatedText = '';
@@ -163,19 +170,24 @@ export async function performOCR(
       concatenatedText = text;
     }
 
+    const tables = detectTables(words, pageWidth, pageHeight, pageNum);
     return {
       pageNumber: pageNum,
       text,
       words,
       lines,
-      blocks
+      blocks: [...inferOfflineBlockTypes(blocks || []), ...tables.map(tableAsBlock)],
+      tables,
+      width: pageWidth,
+      height: pageHeight,
     };
   });
 
-  return {
+  return normalizeStructuredOcrResult({
+    version: STRUCTURED_OCR_VERSION,
     text: concatenatedText,
     pages
-  };
+  });
 }
 
 export async function performPdfOCR(
@@ -183,8 +195,10 @@ export async function performPdfOCR(
   language: string = 'eng',
   options?: PreprocessingOptions,
   pdfRenderScale: number = 2.0,
-  onProgress?: (pageIndex: number, progress: number) => void
+  onProgress?: (pageIndex: number, progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<StructuredOcrResult> {
+  if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
   const pdfjsLib = await import('pdfjs-dist');
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
@@ -207,6 +221,7 @@ export async function performPdfOCR(
 
   const batchSize = 4;
   for (let startPage = 1; startPage <= numPages; startPage += batchSize) {
+    if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
     const endPage = Math.min(startPage + batchSize - 1, numPages);
     const batchPromises = [];
 
@@ -214,6 +229,7 @@ export async function performPdfOCR(
       const pageIndex = pageNum - 1;
       
       const processPage = async () => {
+        if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
         const page = await pdf.getPage(pageNum);
         const viewport = page.getViewport({ scale: pdfRenderScale });
         const canvas = document.createElement('canvas');
@@ -245,6 +261,7 @@ export async function performPdfOCR(
         const results = await ocrPool.performOCR([finalCanvas], language, (idx, prog) => {
           if (onProgress) onProgress(pageIndex, prog);
         });
+        if (signal?.aborted) throw new DOMException('OCR cancelled', 'AbortError');
         
         const tesseractResult = results[0];
         const text = tesseractResult.data.text;
@@ -275,6 +292,8 @@ export async function performPdfOCR(
           }));
         }
 
+        const tables = detectTables(words, pageWidth, pageHeight, pageNum);
+
         // Clean up canvas memory immediately
         canvas.width = 0;
         canvas.height = 0;
@@ -286,7 +305,10 @@ export async function performPdfOCR(
           text,
           words,
           lines,
-          blocks
+          blocks: [...inferOfflineBlockTypes(blocks || []), ...tables.map(tableAsBlock)],
+          tables,
+          width: pageWidth,
+          height: pageHeight,
         };
       };
 
@@ -306,8 +328,9 @@ export async function performPdfOCR(
     }
   });
 
-  return {
+  return normalizeStructuredOcrResult({
+    version: STRUCTURED_OCR_VERSION,
     text: concatenatedText,
     pages
-  };
+  });
 }

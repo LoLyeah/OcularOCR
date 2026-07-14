@@ -48,7 +48,7 @@ Traditional OCR tools require uploading sensitive documents (invoices, tax forms
 
 ## 🗺️ Roadmap
 
-**OcularOCR 1.0.0** is the current stable release. It adds launch security headers, explicit encrypted and no-password vault choices, browser preflight, mobile/PWA hardening, adaptive OCR resource limits, expanded bilingual guidance, and final release documentation. See the [project roadmap](ROADMAP.md), [release notes](RELEASE_NOTES.md), and [release checklist](docs/RELEASE_CHECKLIST.md).
+**OcularOCR 1.0.1** is the current stable release. It adds storage-aware large local imports and page-wise PDF processing on top of the 1.0 launch security, explicit encrypted and no-password vault choices, mobile/PWA hardening, expanded bilingual guidance, and release safeguards. See the [project roadmap](ROADMAP.md), [release notes](RELEASE_NOTES.md), and [release checklist](docs/RELEASE_CHECKLIST.md).
 
 ---
 

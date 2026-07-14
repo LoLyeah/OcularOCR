@@ -1,4 +1,15 @@
-# OcularOCR 1.0.0
+# OcularOCR Release Notes
+
+## 1.0.1
+
+- Replaces the fixed 25 MB local-file ceiling with browser-quota-aware imports.
+- Warns before processing local files of 100 MB or more while allowing them
+  when storage is sufficient.
+- Keeps the 25 MB safety limit for remote URL downloads.
+- Renders searchable PDF exports, region OCR, and engine comparisons one page
+  at a time to reduce peak memory.
+
+## 1.0.0
 
 OcularOCR 1.0 brings the local document workflow—from import through OCR,
 correction, tables, and export—to a stable release baseline. The application

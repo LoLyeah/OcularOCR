@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Smartphone, ArrowDownToLine, RefreshCw } from 'lucide-react';
 import { useVersionCheck } from '@/hooks/use-version-check';
 import { useI18n } from '@/lib/i18n';
 import { getOfflineReadiness } from '@/lib/offline';
+import {
+  announcePwaInstallStatus,
+  PWA_INSTALL_QUERY_EVENT,
+  PWA_INSTALL_REQUEST_EVENT,
+} from '@/lib/pwa-install';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -20,17 +25,28 @@ export function PwaHandler() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const installedRef = useRef(false);
 
-  const setDeferredPrompt = (prompt: BeforeInstallPromptEvent | null) => {
+  const announceInstallStatus = useCallback(() => {
+    announcePwaInstallStatus({
+      available: deferredPromptRef.current !== null && !installedRef.current,
+      installed: installedRef.current,
+    });
+  }, []);
+
+  const setDeferredPrompt = useCallback((prompt: BeforeInstallPromptEvent | null) => {
     deferredPromptRef.current = prompt;
     setDeferredPromptState(prompt);
-  };
+    announceInstallStatus();
+  }, [announceInstallStatus]);
 
   useEffect(() => {
     let promptTimer: ReturnType<typeof setTimeout> | undefined;
     // Check if the app is already running in standalone (installed) mode
     if (window.matchMedia('(display-mode: standalone)').matches) {
+      installedRef.current = true;
       Promise.resolve().then(() => setIsInstalled(true));
+      announceInstallStatus();
     }
 
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -50,27 +66,29 @@ export function PwaHandler() {
     };
 
     const handleAppInstalled = () => {
+      installedRef.current = true;
       setIsInstalled(true);
       setShowPrompt(false);
       setDeferredPrompt(null);
       console.log('OcularOCR installed successfully!');
     };
 
-    const handleTriggerInstall = () => {
+    const handleTriggerInstall = async () => {
       const activePrompt = deferredPromptRef.current;
       if (activePrompt) {
-        activePrompt.prompt();
-        activePrompt.userChoice.then(({ outcome }) => {
-          console.log(`User response to triggered install prompt: ${outcome}`);
-          setDeferredPrompt(null);
-          setShowPrompt(false);
-        });
+        await activePrompt.prompt();
+        const { outcome } = await activePrompt.userChoice;
+        console.log(`User response to triggered install prompt: ${outcome}`);
+        setDeferredPrompt(null);
+        setShowPrompt(false);
       }
     };
+    const handleInstallQuery = () => announceInstallStatus();
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
-    window.addEventListener('trigger-pwa-install', handleTriggerInstall);
+    window.addEventListener(PWA_INSTALL_REQUEST_EVENT, handleTriggerInstall);
+    window.addEventListener(PWA_INSTALL_QUERY_EVENT, handleInstallQuery);
 
     const announceOfflineStatus = async () => {
       const status = await getOfflineReadiness();
@@ -100,13 +118,14 @@ export function PwaHandler() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
-      window.removeEventListener('trigger-pwa-install', handleTriggerInstall);
+      window.removeEventListener(PWA_INSTALL_REQUEST_EVENT, handleTriggerInstall);
+      window.removeEventListener(PWA_INSTALL_QUERY_EVENT, handleInstallQuery);
       navigator.serviceWorker?.removeEventListener('message', handleWorkerMessage);
       window.removeEventListener('online', handleConnectivity);
       window.removeEventListener('offline', handleConnectivity);
       if (promptTimer) clearTimeout(promptTimer);
     };
-  }, []);
+  }, [announceInstallStatus, setDeferredPrompt]);
 
   const handleInstallClick = async () => {
     const activePrompt = deferredPromptRef.current;

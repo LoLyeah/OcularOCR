@@ -23,3 +23,15 @@ test('guide and README external links are secure and provider sources are offici
   for (const host of ['developers.openai.com', 'ai.google.dev', 'docs.ollama.com']) assert.match(content, new RegExp(host.replace('.', '\\.')));
   for (const instruction of ['ollama serve', 'ollama pull gemma3', 'OLLAMA_ORIGINS', 'localhost:11434/v1/chat/completions']) assert.match(content, new RegExp(instruction));
 });
+
+test('PWA guide exposes the browser install prompt only while it is available', () => {
+  const guide = readFileSync('components/guide-content.tsx', 'utf8');
+  const handler = readFileSync('components/pwa-handler.tsx', 'utf8');
+  const events = readFileSync('lib/pwa-install.ts', 'utf8');
+  assert.match(guide, /pwaInstallStatus\.available/);
+  assert.match(guide, /Install OcularOCR/);
+  assert.match(guide, /PWA_INSTALL_QUERY_EVENT/);
+  assert.match(handler, /PWA_INSTALL_REQUEST_EVENT/);
+  assert.match(handler, /PWA_INSTALL_STATUS_EVENT|announcePwaInstallStatus/);
+  assert.match(events, /ocular-pwa-install-status/);
+});

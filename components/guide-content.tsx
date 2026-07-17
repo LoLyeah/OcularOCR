@@ -1,9 +1,15 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { BookOpen, CheckCircle2, Cloud, Download, ExternalLink, FileText, Files, HelpCircle, KeyRound, Menu, ScanText, Search, ShieldCheck, Sparkles, Table2, Terminal, WifiOff, X } from 'lucide-react';
 import { PROVIDERS } from '@/lib/providers';
+import {
+  PWA_INSTALL_QUERY_EVENT,
+  PWA_INSTALL_REQUEST_EVENT,
+  PWA_INSTALL_STATUS_EVENT,
+  type PwaInstallStatus,
+} from '@/lib/pwa-install';
 
 type Locale = 'en' | 'id';
 type ArticleId = 'start' | 'documents' | 'ocr' | 'structure' | 'export' | 'offline' | 'automation' | 'providers' | 'ollama' | 'recovery' | 'faq';
@@ -34,7 +40,12 @@ function Command({ children }: { children: string }) {
   return <pre className="overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100"><code>{children}</code></pre>;
 }
 
-function Article({ id, locale }: { id: ArticleId; locale: Locale }) {
+function Article({ id, locale, pwaInstallStatus, onInstallPwa }: {
+  id: ArticleId;
+  locale: Locale;
+  pwaInstallStatus: PwaInstallStatus;
+  onInstallPwa: () => void;
+}) {
   const en = locale === 'en';
   if (id === 'start') return <div className="space-y-8">
     <Section title={en ? 'Choose a vault mode' : 'Pilih mode vault'}>
@@ -108,6 +119,8 @@ function Article({ id, locale }: { id: ArticleId; locale: Locale }) {
   if (id === 'offline') return <div className="space-y-8">
     <Section title={en ? 'Install the PWA' : 'Instal PWA'}>
       <Steps items={en ? ['Open OcularOCR in a supported browser over HTTPS or localhost.', 'Use the browser install control or the in-app installation prompt.', 'Launch the installed app once while online so the current app shell can be cached.', 'In Settings → Offline & Storage, prepare offline assets and request persistent storage where supported.'] : ['Buka OcularOCR di peramban yang didukung melalui HTTPS atau localhost.', 'Gunakan kontrol instalasi peramban atau prompt instalasi dalam aplikasi.', 'Jalankan aplikasi terinstal sekali saat online agar app shell saat ini dapat disimpan.', 'Di Pengaturan → Offline & Penyimpanan, siapkan aset offline dan minta penyimpanan persisten jika didukung.']} />
+      {pwaInstallStatus.available && <button type="button" onClick={onInstallPwa} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"><Download className="h-4 w-4" />{en ? 'Install OcularOCR' : 'Instal OcularOCR'}</button>}
+      {pwaInstallStatus.installed && <p className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/20 dark:text-emerald-300"><CheckCircle2 className="h-4 w-4" />{en ? 'OcularOCR is already installed.' : 'OcularOCR sudah terinstal.'}</p>}
     </Section>
     <Section title={en ? 'Know what works offline' : 'Ketahui fitur yang bekerja offline'}>
       <div className="grid gap-3 md:grid-cols-2"><div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20"><h3 className="font-bold text-emerald-800 dark:text-emerald-300">{en ? 'Available after preparation' : 'Tersedia setelah persiapan'}</h3><p className="mt-1 text-xs">{en ? 'Vault access, imported documents, PDF tools, downloaded Tesseract languages, local OCR, editing, and local exports.' : 'Akses vault, dokumen impor, alat PDF, bahasa Tesseract terunduh, OCR lokal, pengeditan, dan ekspor lokal.'}</p></div><div className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900"><h3 className="font-bold text-slate-800 dark:text-slate-200">{en ? 'Still needs connectivity' : 'Tetap memerlukan koneksi'}</h3><p className="mt-1 text-xs">{en ? 'Cloud AI, first-time language downloads, URL import, app updates, and any provider not running on this device.' : 'AI cloud, unduhan bahasa pertama, impor URL, pembaruan aplikasi, dan provider apa pun yang tidak berjalan di perangkat ini.'}</p></div></div>
@@ -208,8 +221,17 @@ export function GuideContent({ locale }: { locale: Locale }) {
   const [active, setActive] = useState<ArticleId>('start');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const [pwaInstallStatus, setPwaInstallStatus] = useState<PwaInstallStatus>({ available: false, installed: false });
   const mainRef = useRef<HTMLElement>(null);
   const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    const handleStatus = (event: Event) => {
+      setPwaInstallStatus((event as CustomEvent<PwaInstallStatus>).detail);
+    };
+    window.addEventListener(PWA_INSTALL_STATUS_EVENT, handleStatus);
+    window.dispatchEvent(new Event(PWA_INSTALL_QUERY_EVENT));
+    return () => window.removeEventListener(PWA_INSTALL_STATUS_EVENT, handleStatus);
+  }, []);
   const visible = useMemo(() => articleIds.filter((id) => c.nav[id].toLowerCase().includes(search.toLowerCase())), [c.nav, search]);
   const selectArticle = (id: ArticleId) => {
     setActive(id);
@@ -223,6 +245,6 @@ export function GuideContent({ locale }: { locale: Locale }) {
     <AnimatePresence>
       {open && <motion.div initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-30 bg-slate-900/40 backdrop-blur-sm md:hidden" onClick={() => setOpen(false)}><motion.aside initial={reduceMotion ? false : { x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={reduceMotion ? { duration: 0 } : { type: 'spring', damping: 25, stiffness: 220 }} className="h-full w-72 bg-white p-4 shadow-xl dark:bg-slate-900" onClick={(event) => event.stopPropagation()}><div className="mb-4 flex items-center justify-between"><h1 className="font-bold">{c.title}</h1><button onClick={() => setOpen(false)} aria-label="Close guide menu"><X className="h-5 w-5" /></button></div><GuideNav c={c} visible={visible} active={active} search={search} onSearch={setSearch} onSelect={selectArticle} /></motion.aside></motion.div>}
     </AnimatePresence>
-    <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto"><div className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 md:hidden"><button onClick={() => setOpen(true)} aria-label="Open guide menu"><Menu className="h-5 w-5" /></button><span className="text-sm font-bold">{c.nav[active]}</span></div><AnimatePresence mode="wait" initial={false}><motion.article key={active} initial={reduceMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? undefined : { opacity: 0, x: -12 }} transition={pageTransition} className="mx-auto max-w-3xl px-5 py-8 md:px-10 md:py-12"><header className="mb-8 border-b border-slate-200 pb-5 dark:border-slate-800"><ActiveIcon className="mb-3 h-7 w-7 text-indigo-600" /><h1 className="text-2xl font-bold text-slate-950 dark:text-white">{c.nav[active]}</h1><p className="mt-2 flex items-center gap-1 text-xs text-slate-400"><FileText className="h-3 w-3" />OcularOCR 1.0 guide</p></header><Article id={active} locale={locale} /></motion.article></AnimatePresence></main>
+    <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto"><div className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 md:hidden"><button onClick={() => setOpen(true)} aria-label="Open guide menu"><Menu className="h-5 w-5" /></button><span className="text-sm font-bold">{c.nav[active]}</span></div><AnimatePresence mode="wait" initial={false}><motion.article key={active} initial={reduceMotion ? false : { opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={reduceMotion ? undefined : { opacity: 0, x: -12 }} transition={pageTransition} className="mx-auto max-w-3xl px-5 py-8 md:px-10 md:py-12"><header className="mb-8 border-b border-slate-200 pb-5 dark:border-slate-800"><ActiveIcon className="mb-3 h-7 w-7 text-indigo-600" /><h1 className="text-2xl font-bold text-slate-950 dark:text-white">{c.nav[active]}</h1><p className="mt-2 flex items-center gap-1 text-xs text-slate-400"><FileText className="h-3 w-3" />OcularOCR 1.0 guide</p></header><Article id={active} locale={locale} pwaInstallStatus={pwaInstallStatus} onInstallPwa={() => window.dispatchEvent(new Event(PWA_INSTALL_REQUEST_EVENT))} /></motion.article></AnimatePresence></main>
   </motion.div>;
 }
